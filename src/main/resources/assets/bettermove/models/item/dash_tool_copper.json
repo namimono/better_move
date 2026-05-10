@@ -1,0 +1,6 @@
+{
+	"parent": "minecraft:item/handheld",
+	"textures": {
+		"layer0": "bettermove:item/dash_tool_copper"
+	}
+}

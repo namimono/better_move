@@ -1,0 +1,29 @@
+{
+	"schemaVersion": 1,
+	"id": "bettermove",
+	"version": "${version}",
+	"name": "Better Move",
+	"description": "可升级的位移工具：手持右键沿视线方向冲刺突进。",
+	"authors": [
+		"Gigabyte"
+	],
+	"contact": {
+	},
+	"license": "CC0-1.0",
+	"icon": "assets/bettermove/icon.png",
+	"environment": "*",
+	"entrypoints": {
+		"main": [
+			"com.bettermove.BetterMoveMod"
+		],
+		"client": [
+			"com.bettermove.client.BetterMoveModClient"
+		]
+	},
+	"depends": {
+		"fabricloader": ">=0.19.2",
+		"minecraft": "~1.21.1",
+		"java": ">=21",
+		"fabric-api": "*"
+	}
+}
