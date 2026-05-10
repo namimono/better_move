@@ -1,14 +1,18 @@
 package com.bettermove.item;
 
 import com.bettermove.tier.DashTier;
+import net.minecraft.core.Holder;
 import net.minecraft.core.particles.ParticleTypes;
 import net.minecraft.server.level.ServerLevel;
+import net.minecraft.server.level.ServerPlayer;
+import net.minecraft.sounds.SoundEvent;
 import net.minecraft.sounds.SoundEvents;
 import net.minecraft.sounds.SoundSource;
 import net.minecraft.world.InteractionHand;
 import net.minecraft.world.InteractionResultHolder;
 import net.minecraft.world.entity.EquipmentSlot;
 import net.minecraft.world.entity.player.Player;
+import net.minecraft.world.item.Equipable;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.Level;
@@ -16,7 +20,7 @@ import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.Vec3;
 
 /**
- * 冲刺突进工具。手持右键沿视线方向冲刺，能走多远走多远，撞墙就停。
+ * 冲刺突进装备。装备在玩家腿部槽位，按客户端绑定的冲刺键沿视线方向冲刺。
  *
  * <p>核心算法——「沿视线扫描玩家碰撞箱 + step-up 修正」：
  * 以 {@value #SCAN_STEP} 格步长沿视线方向平移玩家碰撞箱并检测碰撞；若发生碰撞
@@ -29,9 +33,11 @@ import net.minecraft.world.phys.Vec3;
  *   <li>所有等级冷却 3 秒（{@value #COOLDOWN_TICKS} ticks）</li>
  *   <li>每次消耗 {@value #HUNGER_COST} 点饥饿值 + 1 点耐久</li>
  *   <li>仅当玩家完全无法前进（已经被卡死）才取消冷却</li>
+ *   <li>右键空气会把它穿到腿部槽（同原版护甲行为，由 {@link Equipable} 接口提供）</li>
+ *   <li>冲刺触发逻辑见 {@link #tryDashFromKey(ServerPlayer)}</li>
  * </ul>
  */
-public class DashToolItem extends Item {
+public class DashToolItem extends Item implements Equipable {
     private static final int COOLDOWN_TICKS = 60;
     private static final float HUNGER_COST = 2.0f;
 
@@ -61,32 +67,57 @@ public class DashToolItem extends Item {
         return tier;
     }
 
+    // ---------------------------------------------------------------- Equipable
+
+    @Override
+    public EquipmentSlot getEquipmentSlot() {
+        return EquipmentSlot.LEGS;
+    }
+
+    @Override
+    public Holder<SoundEvent> getEquipSound() {
+        return SoundEvents.ARMOR_EQUIP_LEATHER;
+    }
+
+    /**
+     * 右键空气把物品穿到腿部槽（与原版护甲一致）。
+     * 若已经穿着另一件护甲会自动交换。冲刺动作不再由右键触发，统一由按键事件处理。
+     */
     @Override
     public InteractionResultHolder<ItemStack> use(Level level, Player player, InteractionHand hand) {
-        ItemStack stack = player.getItemInHand(hand);
+        return this.swapWithEquipmentSlot(this, level, player, hand);
+    }
 
-        if (player.getCooldowns().isOnCooldown(this)) {
-            return InteractionResultHolder.fail(stack);
+    // ----------------------------------------------------------- Dash entrypoint
+
+    /**
+     * 服务端按键入口：玩家按下冲刺键，由网络层路由到此处。
+     *
+     * <p>所有校验都用服务端权威状态：腿部装备类型 / 冷却 / 饥饿 / 朝向，
+     * 客户端不传任何冲刺参数，避免被改包伪造方向或距离。</p>
+     */
+    public static void tryDashFromKey(ServerPlayer player) {
+        ItemStack legs = player.getItemBySlot(EquipmentSlot.LEGS);
+        if (!(legs.getItem() instanceof DashToolItem dashItem)) {
+            return;
         }
-
+        if (player.getCooldowns().isOnCooldown(dashItem)) {
+            return;
+        }
         boolean creative = player.getAbilities().instabuild;
         if (!creative && player.getFoodData().getFoodLevel() < MIN_FOOD_LEVEL) {
-            return InteractionResultHolder.fail(stack);
+            return;
         }
 
-        // 双端都做可行性扫描，确保客户端的预测和服务端结果一致，避免冷却条假动作。
-        Vec3 targetFeet = findDashTarget(level, player);
+        ServerLevel level = player.serverLevel();
+        Vec3 targetFeet = dashItem.findDashTarget(level, player);
         if (targetFeet == null) {
-            return InteractionResultHolder.fail(stack);
+            return;
         }
 
-        if (!level.isClientSide) {
-            applyDash((ServerLevel) level, player, stack, hand, targetFeet);
-        }
-
-        player.getCooldowns().addCooldown(this, COOLDOWN_TICKS);
-        player.swing(hand, true);
-        return InteractionResultHolder.sidedSuccess(stack, level.isClientSide);
+        dashItem.applyDash(level, player, legs, targetFeet);
+        player.getCooldowns().addCooldown(dashItem, COOLDOWN_TICKS);
+        player.swing(InteractionHand.MAIN_HAND, true);
     }
 
     /**
@@ -168,7 +199,7 @@ public class DashToolItem extends Item {
     }
 
     /** 服务端执行实际位移、消耗与反馈。{@code targetFeet} 必须是已经验证过的合法位置。 */
-    private void applyDash(ServerLevel level, Player player, ItemStack stack, InteractionHand hand, Vec3 targetFeet) {
+    private void applyDash(ServerLevel level, ServerPlayer player, ItemStack legsStack, Vec3 targetFeet) {
         Vec3 originEye = player.getEyePosition();
         double eyeOffsetY = player.getEyeY() - player.getY();
 
@@ -177,10 +208,8 @@ public class DashToolItem extends Item {
 
         player.causeFoodExhaustion(HUNGER_COST);
         if (!player.getAbilities().instabuild) {
-            EquipmentSlot slot = hand == InteractionHand.MAIN_HAND
-                    ? EquipmentSlot.MAINHAND
-                    : EquipmentSlot.OFFHAND;
-            stack.hurtAndBreak(1, player, slot);
+            // 装备在腿部槽，断裂回调要走 LEGS 槽，断裂后才能触发原版护甲损坏事件
+            legsStack.hurtAndBreak(1, player, EquipmentSlot.LEGS);
         }
 
         level.playSound(null, originEye.x, originEye.y, originEye.z,

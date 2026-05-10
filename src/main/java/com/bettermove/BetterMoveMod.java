@@ -1,9 +1,12 @@
 package com.bettermove;
 
 import com.bettermove.item.DashToolItem;
+import com.bettermove.network.DashRequestPayload;
 import com.bettermove.tier.DashTier;
 import net.fabricmc.api.ModInitializer;
 import net.fabricmc.fabric.api.itemgroup.v1.FabricItemGroup;
+import net.fabricmc.fabric.api.networking.v1.PayloadTypeRegistry;
+import net.fabricmc.fabric.api.networking.v1.ServerPlayNetworking;
 import net.minecraft.core.Registry;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.network.chat.Component;
@@ -45,6 +48,17 @@ public class BetterMoveMod implements ModInitializer {
                         })
                         .build()
         );
+
+        // 双端同时注册 payload 类型——客户端用于发包，服务端用于解析。
+        // 放在 main 入口里两边都会执行（环境是 "*"），与客户端入口分离。
+        PayloadTypeRegistry.playC2S().register(DashRequestPayload.TYPE, DashRequestPayload.CODEC);
+
+        // 服务端接收冲刺请求。Fabric 的回调发生在网络线程，必须切到主线程
+        // 再操作世界/玩家状态，否则会有并发风险（瞬移、播粒子都不是线程安全的）。
+        ServerPlayNetworking.registerGlobalReceiver(DashRequestPayload.TYPE, (payload, context) ->
+                context.server().execute(() -> DashToolItem.tryDashFromKey(context.player()))
+        );
+
         LOGGER.info("Better Move initialized.");
     }
 

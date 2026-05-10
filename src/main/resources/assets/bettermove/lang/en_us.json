@@ -1,8 +1,10 @@
 {
 	"itemGroup.bettermove.main": "Better Move",
-	"item.bettermove.dash_tool_wood": "Wooden Dash Tool",
-	"item.bettermove.dash_tool_copper": "Copper Dash Tool",
-	"item.bettermove.dash_tool_iron": "Iron Dash Tool",
-	"item.bettermove.dash_tool_diamond": "Diamond Dash Tool",
-	"item.bettermove.dash_tool_netherite": "Netherite Dash Tool"
+	"item.bettermove.dash_tool_wood": "Wooden Dash Leggings",
+	"item.bettermove.dash_tool_copper": "Copper Dash Leggings",
+	"item.bettermove.dash_tool_iron": "Iron Dash Leggings",
+	"item.bettermove.dash_tool_diamond": "Diamond Dash Leggings",
+	"item.bettermove.dash_tool_netherite": "Netherite Dash Leggings",
+	"key.categories.bettermove": "Better Move",
+	"key.bettermove.dash": "Dash"
 }
