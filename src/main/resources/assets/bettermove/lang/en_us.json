@@ -1,8 +1,10 @@
 {
 	"itemGroup.bettermove.main": "Better Move",
 	"item.bettermove.dash_tool_wood": "Wooden Dash Leggings",
+	"item.bettermove.dash_tool_stone": "Stone Dash Leggings",
 	"item.bettermove.dash_tool_copper": "Copper Dash Leggings",
 	"item.bettermove.dash_tool_iron": "Iron Dash Leggings",
+	"item.bettermove.dash_tool_gold": "Golden Dash Leggings",
 	"item.bettermove.dash_tool_diamond": "Diamond Dash Leggings",
 	"item.bettermove.dash_tool_netherite": "Netherite Dash Leggings",
 	"key.categories.bettermove": "Better Move",

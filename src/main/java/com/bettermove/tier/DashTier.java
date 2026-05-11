@@ -6,8 +6,12 @@ package com.bettermove.tier;
  */
 public enum DashTier {
     WOOD("wood", 5.0, 60),
+    /** 介于木与铜之间，耐久对齐原版石质工具。 */
+    STONE("stone", 6.0, 131),
     COPPER("copper", 7.0, 200),
     IRON("iron", 10.0, 350),
+    /** 距离略优、耐久很低，贴近原版金质工具定位。 */
+    GOLD("gold", 12.0, 48),
     DIAMOND("diamond", 15.0, 1500),
     NETHERITE("netherite", 18.0, 2032);
 

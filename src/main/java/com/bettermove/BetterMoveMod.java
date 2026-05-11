@@ -4,6 +4,7 @@ import com.bettermove.item.DashToolItem;
 import com.bettermove.network.DashRequestPayload;
 import com.bettermove.tier.DashTier;
 import net.fabricmc.api.ModInitializer;
+import net.fabricmc.fabric.api.event.lifecycle.v1.ServerTickEvents;
 import net.fabricmc.fabric.api.itemgroup.v1.FabricItemGroup;
 import net.fabricmc.fabric.api.networking.v1.PayloadTypeRegistry;
 import net.fabricmc.fabric.api.networking.v1.ServerPlayNetworking;
@@ -23,8 +24,10 @@ public class BetterMoveMod implements ModInitializer {
     public static final Logger LOGGER = LoggerFactory.getLogger(MOD_ID);
 
     public static final Item DASH_TOOL_WOOD = registerDashTool(DashTier.WOOD);
+    public static final Item DASH_TOOL_STONE = registerDashTool(DashTier.STONE);
     public static final Item DASH_TOOL_COPPER = registerDashTool(DashTier.COPPER);
     public static final Item DASH_TOOL_IRON = registerDashTool(DashTier.IRON);
+    public static final Item DASH_TOOL_GOLD = registerDashTool(DashTier.GOLD);
     public static final Item DASH_TOOL_DIAMOND = registerDashTool(DashTier.DIAMOND);
     public static final Item DASH_TOOL_NETHERITE = registerDashTool(DashTier.NETHERITE);
 
@@ -41,8 +44,10 @@ public class BetterMoveMod implements ModInitializer {
                         .title(Component.translatable("itemGroup.bettermove.main"))
                         .displayItems((params, output) -> {
                             output.accept(DASH_TOOL_WOOD);
+                            output.accept(DASH_TOOL_STONE);
                             output.accept(DASH_TOOL_COPPER);
                             output.accept(DASH_TOOL_IRON);
+                            output.accept(DASH_TOOL_GOLD);
                             output.accept(DASH_TOOL_DIAMOND);
                             output.accept(DASH_TOOL_NETHERITE);
                         })
@@ -58,6 +63,8 @@ public class BetterMoveMod implements ModInitializer {
         ServerPlayNetworking.registerGlobalReceiver(DashRequestPayload.TYPE, (payload, context) ->
                 context.server().execute(() -> DashToolItem.tryDashFromKey(context.player()))
         );
+
+        ServerTickEvents.END_SERVER_TICK.register(DashToolItem::tickActiveMotions);
 
         LOGGER.info("Better Move initialized.");
     }

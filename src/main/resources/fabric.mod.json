@@ -3,7 +3,7 @@
 	"id": "bettermove",
 	"version": "${version}",
 	"name": "Better Move",
-	"description": "可升级的位移装备：装备到腿部槽位，按下冲刺键沿视线方向冲刺突进。",
+	"description": "可升级的位移装备：装备到腿部槽位，按下冲刺键沿移动方向分段冲刺突进。",
 	"authors": [
 		"Gigabyte"
 	],
