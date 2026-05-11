@@ -7,6 +7,8 @@ import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents;
 import net.fabricmc.fabric.api.client.keybinding.v1.KeyBindingHelper;
 import net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking;
 import net.minecraft.client.KeyMapping;
+import net.minecraft.client.player.LocalPlayer;
+import net.minecraft.world.phys.Vec3;
 import org.lwjgl.glfw.GLFW;
 
 /**
@@ -30,14 +32,19 @@ public class BetterMoveModClient implements ClientModInitializer {
         ));
 
         ClientTickEvents.END_CLIENT_TICK.register(client -> {
-            if (client.player == null) {
+            LocalPlayer player = client.player;
+            if (player == null) {
                 return;
             }
             // consumeClick 在按键被按下且未消费时返回 true，重复按键会逐次返回。
             // while 循环可避免一帧内多次按键被吃掉，但实际上 60 ticks 的冷却会在
             // 服务端兜底，每次发包代价极低。
             while (dashKey.consumeClick()) {
-                ClientPlayNetworking.send(new DashRequestPayload());
+                // 客户端 LocalPlayer.getDeltaMovement() 来自本地物理模拟，是真实的
+                // 水平速度；服务端拿不到水平速度（玩家移动包走 absMoveTo 把 xo/zo
+                // 也一并重置），所以由客户端在按键瞬间把水平移动分量送上去。
+                Vec3 vel = player.getDeltaMovement();
+                ClientPlayNetworking.send(new DashRequestPayload(vel.x, vel.z));
             }
         });
     }

@@ -36,6 +36,7 @@ public class BetterMoveMod implements ModInitializer {
 
     @Override
     public void onInitialize() {
+        // 注册创造模式栏
         Registry.register(
                 BuiltInRegistries.CREATIVE_MODE_TAB,
                 ITEM_GROUP_KEY,
@@ -61,7 +62,8 @@ public class BetterMoveMod implements ModInitializer {
         // 服务端接收冲刺请求。Fabric 的回调发生在网络线程，必须切到主线程
         // 再操作世界/玩家状态，否则会有并发风险（瞬移、播粒子都不是线程安全的）。
         ServerPlayNetworking.registerGlobalReceiver(DashRequestPayload.TYPE, (payload, context) ->
-                context.server().execute(() -> DashToolItem.tryDashFromKey(context.player()))
+                context.server().execute(() ->
+                        DashToolItem.tryDashFromKey(context.player(), payload.dirX(), payload.dirZ()))
         );
 
         ServerTickEvents.END_SERVER_TICK.register(DashToolItem::tickActiveMotions);
