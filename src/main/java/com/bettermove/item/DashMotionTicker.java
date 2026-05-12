@@ -10,7 +10,7 @@ import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.phys.Vec3;
 
 /**
- * 以「速度脉冲」驱动冲刺：服务端持续把玩家的 {@code deltaMovement} 锁定为冲刺速度，
+ * 以「速度脉冲」驱动冲刺：服务端持续把玩家的 {@code deltaMovement} 锁定为当前装备等级的冲刺速度，
  * 由原版物理推动玩家移动。这样客户端的 {@code LocalPlayer} 拿到的是
  * {@code ClientboundSetEntityMotionPacket}（由 {@link net.minecraft.world.entity.LivingEntity#hurtMarked}
  * 字段触发同步），后续移动由<strong>客户端本地物理 + 渲染帧插值</strong>完成，
@@ -31,15 +31,6 @@ import net.minecraft.world.phys.Vec3;
  * </ul>
  */
 public final class DashMotionTicker {
-    /**
-     * 冲刺水平速度（格/tick）。1.0 ≈ 20 格/秒，约疾跑（0.28 格/tick）的 3.5 倍。
-     *
-     * <p>注意：单次 tick 水平位移最好别超过 ~10 格，否则会触发 vanilla
-     * {@code ServerGamePacketListenerImpl} 的 movedWrongly 检测警告（不会踢人，
-     * 但日志会刷屏）。</p>
-     */
-    public static final double DASH_SPEED = 1.0;
-
     /** 单 tick 水平位移低于该值视为撞墙；冲刺立即中止。 */
     private static final double STUCK_PROGRESS = 0.05;
 
@@ -66,12 +57,13 @@ public final class DashMotionTicker {
             Vec3 startFeet,
             double targetDistance,
             Vec3 direction,
+            double speed,
             Vec3 originEye,
             double eyeOffsetY) {
-        applyVelocity(player, direction);
+        applyVelocity(player, direction, speed);
         ACTIVE.put(
                 player.getUUID(),
-                new ActiveDash(level, startFeet, direction, targetDistance, originEye, eyeOffsetY));
+                new ActiveDash(level, startFeet, direction, targetDistance, speed, originEye, eyeOffsetY));
     }
 
     /**
@@ -99,8 +91,8 @@ public final class DashMotionTicker {
      * 这样从高处起冲也不会一边冲一边坠落，行为更可预测。
      * {@code hurtMarked = true} 是 vanilla 触发实体速度同步包的标准方式。
      */
-    private static void applyVelocity(ServerPlayer player, Vec3 direction) {
-        player.setDeltaMovement(direction.x * DASH_SPEED, 0.0, direction.z * DASH_SPEED);
+    private static void applyVelocity(ServerPlayer player, Vec3 direction, double speed) {
+        player.setDeltaMovement(direction.x * speed, 0.0, direction.z * speed);
         player.resetFallDistance();
         player.hurtMarked = true;
     }
@@ -117,6 +109,7 @@ public final class DashMotionTicker {
         private final Vec3 startFeet;
         private final Vec3 direction;
         private final double targetDistance;
+        private final double speed;
         private final Vec3 originEye;
         private final double eyeOffsetY;
         private Vec3 lastPos;
@@ -127,12 +120,14 @@ public final class DashMotionTicker {
                 Vec3 startFeet,
                 Vec3 direction,
                 double targetDistance,
+                double speed,
                 Vec3 originEye,
                 double eyeOffsetY) {
             this.level = level;
             this.startFeet = startFeet;
             this.direction = direction;
             this.targetDistance = targetDistance;
+            this.speed = speed;
             this.originEye = originEye;
             this.eyeOffsetY = eyeOffsetY;
         }
@@ -163,7 +158,7 @@ public final class DashMotionTicker {
             }
 
             // 继续维持速度：vanilla 每 tick 会因摩擦/碰撞衰减 deltaMovement，必须重置
-            applyVelocity(player, direction);
+            applyVelocity(player, direction, speed);
             return false;
         }
 

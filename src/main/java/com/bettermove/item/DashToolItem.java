@@ -24,7 +24,7 @@ import net.minecraft.world.phys.Vec3;
 /**
  * 冲刺突进装备。装备在玩家腿部槽位，按客户端绑定的冲刺键沿<strong>水平移动方向</strong>冲刺
  * （站立或空中几乎无位移时退化为水平朝向）；通过 {@link DashMotionTicker} 给玩家施加
- * 一个固定速度的水平脉冲，剩余移动交给原版物理推进，依靠客户端本地物理 + 渲染帧插值实现丝滑。
+ * 一个按装备等级决定速度的水平脉冲，剩余移动交给原版物理推进，依靠客户端本地物理 + 渲染帧插值实现丝滑。
  *
  * <p>核心算法——「沿冲刺方向扫描玩家碰撞箱 + step-up 修正」：
  * 以 {@value #SCAN_STEP} 格步长沿冲刺方向平移玩家碰撞箱并检测碰撞；若发生碰撞
@@ -33,7 +33,7 @@ import net.minecraft.world.phys.Vec3;
  * 而不是直接判失败。</p>
  *
  * <ul>
- *   <li>距离与耐久由 {@link DashTier} 决定</li>
+ *   <li>距离、速度与耐久由 {@link DashTier} 决定</li>
  *   <li>所有等级冷却 3 秒（{@value #COOLDOWN_TICKS} ticks）</li>
  *   <li>每次消耗饥饿（{@value #HUNGER_EXHAUSTION} 疲劳值）+ 1 点耐久</li>
  *   <li>仅当玩家完全无法前进（已经被卡死）才取消冷却</li>
@@ -211,7 +211,16 @@ public class DashToolItem extends Item implements Equipable {
     }
 
     private static boolean canFitOffset(Level level, Player player, AABB origBox, Vec3 offset) {
-        return level.noCollision(player, origBox.move(offset.x, offset.y, offset.z));
+        AABB movedBox = origBox.move(offset.x, offset.y, offset.z);
+        if (!level.getWorldBorder().isWithinBounds(movedBox)) {
+            return false;
+        }
+
+        // 只把真实 collision shape 当作阻挡，忽略草、花这类可穿过的装饰方块。
+        if (level.getBlockCollisions(player, movedBox).iterator().hasNext()) {
+            return false;
+        }
+        return level.getEntityCollisions(player, movedBox).isEmpty();
     }
 
     /** 客户端 delta 视为"在走"的最小阈值（格²/tick²）。低于这个值就当作站立。 */
@@ -276,7 +285,7 @@ public class DashToolItem extends Item implements Equipable {
         }
         Vec3 dashDir = new Vec3(dx / horizDistance, 0.0, dz / horizDistance);
 
-        DashMotionTicker.start(level, player, startFeet, horizDistance, dashDir, originEye, eyeOffsetY);
+        DashMotionTicker.start(level, player, startFeet, horizDistance, dashDir, tier.getSpeed(), originEye, eyeOffsetY);
     }
 
     /** 沿轨迹播洒云粒子，强化突进的视觉反馈。 */
