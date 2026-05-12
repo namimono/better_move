@@ -44,7 +44,9 @@ import net.minecraft.world.phys.Vec3;
 public class DashToolItem extends Item implements Equipable {
     private static final int COOLDOWN_TICKS = 60;
     /** {@link Player#causeFoodExhaustion(float)} 用量；略低于旧版 2.0，减轻「一冲就饿」。 */
-    private static final float HUNGER_EXHAUSTION = 1.0f;
+    private static final float MOVEMENT_DASH_HUNGER_EXHAUSTION = 1.0f;
+    /** 保留 main 分支旧实现：视线冲刺使用瞬移 + 2.0 饥饿消耗。 */
+    private static final float LOOK_DASH_HUNGER_EXHAUSTION = 2.0f;
 
     /** 沿冲刺方向扫描时的步长（格）。 */
     private static final double SCAN_STEP = 0.25;
@@ -60,8 +62,18 @@ public class DashToolItem extends Item implements Equipable {
 
     /** 饥饿值低于该值禁止突进，避免饿到掉血时还能瞎冲。 */
     private static final int MIN_FOOD_LEVEL = 6;
+    /**
+     * 目前仍默认使用“移动方向冲刺”。
+     * 旧的“视线方向冲刺”逻辑先完整保留在代码里，后续可挂到装备升级项上。
+     */
+    private static final DashMode ACTIVE_DASH_MODE = DashMode.MOVEMENT_DIRECTION;
 
     private final DashTier tier;
+
+    private enum DashMode {
+        MOVEMENT_DIRECTION,
+        LOOK_DIRECTION
+    }
 
     public DashToolItem(Properties properties, DashTier tier) {
         super(properties);
@@ -142,6 +154,16 @@ public class DashToolItem extends Item implements Equipable {
      * @return 可前进的目标坐标；若沿该方向推进 < {@value #MIN_DASH_DISTANCE} 格视为无效
      */
     private Vec3 findDashTarget(Level level, Player player, double clientDirX, double clientDirZ) {
+        return switch (ACTIVE_DASH_MODE) {
+            case MOVEMENT_DIRECTION -> findMovementDashTarget(level, player, clientDirX, clientDirZ);
+            case LOOK_DIRECTION -> findLookDashTarget(level, player);
+        };
+    }
+
+    /**
+     * 当前启用的实现：优先按玩家水平移动方向扫描；站立时退化到水平视线方向。
+     */
+    private Vec3 findMovementDashTarget(Level level, Player player, double clientDirX, double clientDirZ) {
         Vec3 dir = horizontalDashDirection(player, clientDirX, clientDirZ);
         if (dir.lengthSqr() < 1.0e-6) {
             return null;
@@ -186,6 +208,58 @@ public class DashToolItem extends Item implements Equipable {
         }
 
         // 用 bestT（冲刺方向标量进度）而不是 bestOffset.length 判定，避免「原地抬升」误判为成功
+        if (bestT < MIN_DASH_DISTANCE) {
+            return null;
+        }
+        return origin.add(bestOffset);
+    }
+
+    /**
+     * 保留 main 分支旧实现：直接沿视线方向扫描，允许向上/向下看时带 y 分量。
+     * 目前不启用，后续可挂到装备升级项或配置开关。
+     */
+    private Vec3 findLookDashTarget(Level level, Player player) {
+        Vec3 lookVec = player.getViewVector(1.0f);
+        if (lookVec.lengthSqr() < 1.0e-6) {
+            return null;
+        }
+        Vec3 dir = lookVec.normalize();
+
+        AABB origBox = player.getBoundingBox();
+        Vec3 origin = player.position();
+        double maxDist = tier.getDistance();
+
+        double bestT = 0.0;
+        Vec3 bestOffset = Vec3.ZERO;
+        boolean blocked = false;
+
+        for (double t = SCAN_STEP; t <= maxDist + 1.0e-6; t += SCAN_STEP) {
+            Vec3 fitted = tryFitOffset(level, player, origBox, dir.scale(t));
+            if (fitted != null) {
+                bestT = t;
+                bestOffset = fitted;
+            } else {
+                blocked = true;
+                break;
+            }
+        }
+
+        if (blocked) {
+            double lo = bestT;
+            double hi = Math.min(bestT + SCAN_STEP, maxDist);
+            for (int i = 0; i < REFINE_ITERS; i++) {
+                double mid = (lo + hi) * 0.5;
+                Vec3 fitted = tryFitOffset(level, player, origBox, dir.scale(mid));
+                if (fitted != null) {
+                    lo = mid;
+                    bestOffset = fitted;
+                } else {
+                    hi = mid;
+                }
+            }
+            bestT = lo;
+        }
+
         if (bestT < MIN_DASH_DISTANCE) {
             return null;
         }
@@ -263,10 +337,22 @@ public class DashToolItem extends Item implements Equipable {
             ItemStack legsStack,
             Vec3 startFeet,
             Vec3 targetFeet) {
+        switch (ACTIVE_DASH_MODE) {
+            case MOVEMENT_DIRECTION -> applyMovementDash(level, player, legsStack, startFeet, targetFeet);
+            case LOOK_DIRECTION -> applyLookDash(level, player, legsStack, targetFeet);
+        }
+    }
+
+    private void applyMovementDash(
+            ServerLevel level,
+            ServerPlayer player,
+            ItemStack legsStack,
+            Vec3 startFeet,
+            Vec3 targetFeet) {
         Vec3 originEye = player.getEyePosition();
         double eyeOffsetY = player.getEyeY() - player.getY();
 
-        player.causeFoodExhaustion(HUNGER_EXHAUSTION);
+        player.causeFoodExhaustion(MOVEMENT_DASH_HUNGER_EXHAUSTION);
         if (!player.getAbilities().instabuild) {
             // 装备在腿部槽，断裂回调要走 LEGS 槽，断裂后才能触发原版护甲损坏事件
             legsStack.hurtAndBreak(1, player, EquipmentSlot.LEGS);
@@ -284,6 +370,26 @@ public class DashToolItem extends Item implements Equipable {
         Vec3 dashDir = new Vec3(dx / horizDistance, 0.0, dz / horizDistance);
 
         DashMotionTicker.start(level, player, startFeet, horizDistance, dashDir, tier.getSpeed(), originEye, eyeOffsetY);
+    }
+
+    /** 保留 main 分支旧实现：服务端直接瞬移到扫描终点。 */
+    private void applyLookDash(ServerLevel level, ServerPlayer player, ItemStack legsStack, Vec3 targetFeet) {
+        Vec3 originEye = player.getEyePosition();
+        double eyeOffsetY = player.getEyeY() - player.getY();
+
+        player.teleportTo(targetFeet.x, targetFeet.y, targetFeet.z);
+        player.resetFallDistance();
+
+        player.causeFoodExhaustion(LOOK_DASH_HUNGER_EXHAUSTION);
+        if (!player.getAbilities().instabuild) {
+            legsStack.hurtAndBreak(1, player, EquipmentSlot.LEGS);
+        }
+
+        level.playSound(null, originEye.x, originEye.y, originEye.z,
+                SoundEvents.BREEZE_SHOOT, SoundSource.PLAYERS, 1.0f, 1.2f);
+
+        Vec3 targetEye = targetFeet.add(0.0, eyeOffsetY, 0.0);
+        emitTrailParticles(level, originEye, targetEye);
     }
 
     /** 沿轨迹播洒云粒子，强化突进的视觉反馈。 */
