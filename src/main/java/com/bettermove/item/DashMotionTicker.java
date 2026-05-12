@@ -1,5 +1,6 @@
 package com.bettermove.item;
 
+import com.bettermove.tier.DashTier;
 import java.util.Iterator;
 import java.util.Map;
 import java.util.UUID;
@@ -37,8 +38,6 @@ public final class DashMotionTicker {
     private static final int STUCK_GRACE_TICKS = 2;
     /** 必须连续多个 tick 都几乎没推进，才视为真的撞墙。 */
     private static final int STUCK_CONSECUTIVE_TICKS = 3;
-    /** 喷射推进收尾倍率：末段不会拖着滑行，而是快速断推。 */
-    private static final double MIN_END_SPEED_MULTIPLIER = 0.35;
     /** 单次冲刺最长持续 tick 数兜底余量。 */
     private static final int MAX_TICK_PADDING = 6;
 
@@ -62,14 +61,15 @@ public final class DashMotionTicker {
             Vec3 startFeet,
             double targetDistance,
             Vec3 direction,
-            double speed,
+            DashTier tier,
             Vec3 originEye,
             double eyeOffsetY) {
+        double speed = tier.getSpeed();
         int plannedTicks = estimatePlannedTicks(targetDistance, speed);
-        applyVelocity(player, direction, speedForTick(speed, 0, plannedTicks));
+        applyVelocity(player, direction, speedForTick(tier, tickProgress(0, plannedTicks)));
         ACTIVE.put(
                 player.getUUID(),
-                new ActiveDash(level, startFeet, direction, targetDistance, speed, plannedTicks, originEye, eyeOffsetY));
+                new ActiveDash(level, startFeet, direction, targetDistance, tier, plannedTicks, originEye, eyeOffsetY));
     }
 
     /**
@@ -115,7 +115,7 @@ public final class DashMotionTicker {
         private final Vec3 startFeet;
         private final Vec3 direction;
         private final double targetDistance;
-        private final double speed;
+        private final DashTier tier;
         private final int plannedTicks;
         private final Vec3 originEye;
         private final double eyeOffsetY;
@@ -128,7 +128,7 @@ public final class DashMotionTicker {
                 Vec3 startFeet,
                 Vec3 direction,
                 double targetDistance,
-                double speed,
+                DashTier tier,
                 int plannedTicks,
                 Vec3 originEye,
                 double eyeOffsetY) {
@@ -136,7 +136,7 @@ public final class DashMotionTicker {
             this.startFeet = startFeet;
             this.direction = direction;
             this.targetDistance = targetDistance;
-            this.speed = speed;
+            this.tier = tier;
             this.plannedTicks = plannedTicks;
             this.originEye = originEye;
             this.eyeOffsetY = eyeOffsetY;
@@ -177,7 +177,7 @@ public final class DashMotionTicker {
             }
 
             // 喷射推进：前段快速点火，中段持续推力，末段快速断推。
-            applyVelocity(player, direction, speedForTick(speed, tick, plannedTicks));
+            applyVelocity(player, direction, speedForTick(tier, tickProgress(tick, plannedTicks)));
             return false;
         }
 
@@ -197,23 +197,27 @@ public final class DashMotionTicker {
         return Math.max(4, (int) Math.ceil(targetDistance / Math.max(speed, 1.0e-6)));
     }
 
-    private static double speedForTick(double baseSpeed, int tick, int plannedTicks) {
+    private static double tickProgress(int tick, int plannedTicks) {
         if (plannedTicks <= 1) {
-            return baseSpeed;
+            return 1.0;
         }
-
-        double progress = Math.min(1.0, (double) tick / (plannedTicks - 1));
-        return baseSpeed * jetSpeedMultiplier(progress);
+        return Math.min(1.0, (double) tick / (plannedTicks - 1));
     }
 
-    private static double jetSpeedMultiplier(double progress) {
+    private static double speedForTick(DashTier tier, double progress) {
+        return tier.getSpeed() * jetSpeedMultiplier(progress, tier);
+    }
+
+    private static double jetSpeedMultiplier(double progress, DashTier tier) {
+        double peakMultiplier = tier.getBoostStrength();
+        double endMultiplier = tier.getEndSpeedMultiplier();
         if (progress < 0.15) {
-            return lerp(progress / 0.15, 0.90, 1.15);
+            return lerp(progress / 0.15, 0.90, peakMultiplier);
         }
         if (progress < 0.70) {
-            return lerp((progress - 0.15) / 0.55, 1.15, 1.00);
+            return lerp((progress - 0.15) / 0.55, peakMultiplier, 1.00);
         }
-        return lerp((progress - 0.70) / 0.30, 1.00, MIN_END_SPEED_MULTIPLIER);
+        return lerp((progress - 0.70) / 0.30, 1.00, endMultiplier);
     }
 
     private static double lerp(double t, double start, double end) {

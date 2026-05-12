@@ -369,7 +369,7 @@ public class DashToolItem extends Item implements Equipable {
         }
         Vec3 dashDir = new Vec3(dx / horizDistance, 0.0, dz / horizDistance);
 
-        DashMotionTicker.start(level, player, startFeet, horizDistance, dashDir, tier.getSpeed(), originEye, eyeOffsetY);
+        DashMotionTicker.start(level, player, startFeet, horizDistance, dashDir, tier, originEye, eyeOffsetY);
     }
 
     /** 保留 main 分支旧实现：服务端直接瞬移到扫描终点。 */
