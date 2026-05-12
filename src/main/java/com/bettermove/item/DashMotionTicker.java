@@ -37,9 +37,10 @@ public final class DashMotionTicker {
     private static final int STUCK_GRACE_TICKS = 2;
     /** 必须连续多个 tick 都几乎没推进，才视为真的撞墙。 */
     private static final int STUCK_CONSECUTIVE_TICKS = 3;
-
-    /** 单次冲刺最长持续 tick 数，兜底上限。理论上 {@code 18 / 1.0 + 余量} 已足够。 */
-    private static final int MAX_TICKS = 40;
+    /** 喷射推进收尾倍率：末段不会拖着滑行，而是快速断推。 */
+    private static final double MIN_END_SPEED_MULTIPLIER = 0.35;
+    /** 单次冲刺最长持续 tick 数兜底余量。 */
+    private static final int MAX_TICK_PADDING = 6;
 
     private static final Map<UUID, ActiveDash> ACTIVE = new ConcurrentHashMap<>();
 
@@ -64,10 +65,11 @@ public final class DashMotionTicker {
             double speed,
             Vec3 originEye,
             double eyeOffsetY) {
-        applyVelocity(player, direction, speed);
+        int plannedTicks = estimatePlannedTicks(targetDistance, speed);
+        applyVelocity(player, direction, speedForTick(speed, 0, plannedTicks));
         ACTIVE.put(
                 player.getUUID(),
-                new ActiveDash(level, startFeet, direction, targetDistance, speed, originEye, eyeOffsetY));
+                new ActiveDash(level, startFeet, direction, targetDistance, speed, plannedTicks, originEye, eyeOffsetY));
     }
 
     /**
@@ -114,6 +116,7 @@ public final class DashMotionTicker {
         private final Vec3 direction;
         private final double targetDistance;
         private final double speed;
+        private final int plannedTicks;
         private final Vec3 originEye;
         private final double eyeOffsetY;
         private double lastProgress;
@@ -126,6 +129,7 @@ public final class DashMotionTicker {
                 Vec3 direction,
                 double targetDistance,
                 double speed,
+                int plannedTicks,
                 Vec3 originEye,
                 double eyeOffsetY) {
             this.level = level;
@@ -133,6 +137,7 @@ public final class DashMotionTicker {
             this.direction = direction;
             this.targetDistance = targetDistance;
             this.speed = speed;
+            this.plannedTicks = plannedTicks;
             this.originEye = originEye;
             this.eyeOffsetY = eyeOffsetY;
         }
@@ -166,13 +171,13 @@ public final class DashMotionTicker {
                 return true;
             }
 
-            if (tick >= MAX_TICKS) {
+            if (tick >= plannedTicks + MAX_TICK_PADDING) {
                 emitEndParticles(cur);
                 return true;
             }
 
-            // 继续维持速度：vanilla 每 tick 会因摩擦/碰撞衰减 deltaMovement，必须重置
-            applyVelocity(player, direction, speed);
+            // 喷射推进：前段快速点火，中段持续推力，末段快速断推。
+            applyVelocity(player, direction, speedForTick(speed, tick, plannedTicks));
             return false;
         }
 
@@ -186,5 +191,32 @@ public final class DashMotionTicker {
             double dz = currentFeet.z - startFeet.z;
             return dx * direction.x + dz * direction.z;
         }
+    }
+
+    private static int estimatePlannedTicks(double targetDistance, double speed) {
+        return Math.max(4, (int) Math.ceil(targetDistance / Math.max(speed, 1.0e-6)));
+    }
+
+    private static double speedForTick(double baseSpeed, int tick, int plannedTicks) {
+        if (plannedTicks <= 1) {
+            return baseSpeed;
+        }
+
+        double progress = Math.min(1.0, (double) tick / (plannedTicks - 1));
+        return baseSpeed * jetSpeedMultiplier(progress);
+    }
+
+    private static double jetSpeedMultiplier(double progress) {
+        if (progress < 0.15) {
+            return lerp(progress / 0.15, 0.90, 1.15);
+        }
+        if (progress < 0.70) {
+            return lerp((progress - 0.15) / 0.55, 1.15, 1.00);
+        }
+        return lerp((progress - 0.70) / 0.30, 1.00, MIN_END_SPEED_MULTIPLIER);
+    }
+
+    private static double lerp(double t, double start, double end) {
+        return start + (end - start) * t;
     }
 }
