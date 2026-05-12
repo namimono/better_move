@@ -99,10 +99,9 @@ public class DashToolItem extends Item implements Equipable {
      * 服务端按键入口：玩家按下冲刺键，由网络层路由到此处。
      *
      * <p>关键校验（装备 / 冷却 / 饥饿 / 距离）都以服务端权威状态为准。冲刺方向
-     * 由客户端在按键瞬间把自己物理模拟的水平速度 ({@code clientDirX/Z}) 一并送上来：
-     * 服务端的 {@code ServerPlayer.getDeltaMovement()} 和 {@code xo/zo} 在 vanilla
-     * 走的 {@code absMoveTo} 路径下水平分量恒为 0，唯一可靠的来源是客户端测量值。
-     * 客户端就算伪造方向也只能影响自身一次冲刺去向，没有 exploit 空间。</p>
+     * 由客户端在按键瞬间把自己当前输入意图对应的水平向量 ({@code clientDirX/Z}) 一并送上来。
+     * 这样空中残留惯性与当前按键相反时，冲刺仍然跟随玩家此刻的操作意图。客户端就算伪造
+     * 方向也只能影响自身一次冲刺去向，没有 exploit 空间。</p>
      */
     public static void tryDashFromKey(ServerPlayer player, double clientDirX, double clientDirZ) {
         ItemStack legs = player.getItemBySlot(EquipmentSlot.LEGS);
@@ -223,20 +222,19 @@ public class DashToolItem extends Item implements Equipable {
         return level.getEntityCollisions(player, movedBox).isEmpty();
     }
 
-    /** 客户端 delta 视为"在走"的最小阈值（格²/tick²）。低于这个值就当作站立。 */
-    private static final double MIN_CLIENT_DELTA_SQR = 1.0e-4;
+    /** 客户端输入向量视为"有移动意图"的最小阈值。低于这个值就当作未输入。 */
+    private static final double MIN_CLIENT_DIRECTION_SQR = 1.0e-4;
 
     /**
      * 优先取玩家当前<strong>水平移动方向</strong>作为冲刺朝向（侧跑、倒退冲刺与体感一致）；
      * 没有水平位移时退化为水平视线方向；直视正上/正下时再退化为仅由偏航角决定的水平前向。
      *
-     * <p>水平速度直接由客户端在按键瞬间从 {@code LocalPlayer.getDeltaMovement()} 取出
-     * 并随包送上来。原因见 {@link DashRequestPayload} 注释：服务端的 deltaMovement
-     * 和 xo/zo 在 vanilla 处理玩家移动包时都被 {@code absMoveTo} 重置，水平分量恒为 0。</p>
+     * <p>水平输入方向由客户端在按键瞬间按当前前后左右输入换算后随包送上来。
+     * 原因见 {@link DashRequestPayload} 注释：服务端拿不到玩家这一刻的原始输入意图。</p>
      */
     private static Vec3 horizontalDashDirection(Player player, double clientDirX, double clientDirZ) {
         Vec3 horizMove = new Vec3(clientDirX, 0.0, clientDirZ);
-        if (horizMove.lengthSqr() > MIN_CLIENT_DELTA_SQR) {
+        if (horizMove.lengthSqr() > MIN_CLIENT_DIRECTION_SQR) {
             return horizMove.normalize();
         }
         Vec3 look = player.getViewVector(1.0f);

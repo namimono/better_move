@@ -33,6 +33,10 @@ import net.minecraft.world.phys.Vec3;
 public final class DashMotionTicker {
     /** 单 tick 水平位移低于该值视为撞墙；冲刺立即中止。 */
     private static final double STUCK_PROGRESS = 0.05;
+    /** 冲刺刚启动时给少量缓冲 tick，避免与起跳残留惯性/同步抖动对冲时被误判撞墙。 */
+    private static final int STUCK_GRACE_TICKS = 2;
+    /** 必须连续多个 tick 都几乎没推进，才视为真的撞墙。 */
+    private static final int STUCK_CONSECUTIVE_TICKS = 3;
 
     /** 单次冲刺最长持续 tick 数，兜底上限。理论上 {@code 18 / 1.0 + 余量} 已足够。 */
     private static final int MAX_TICKS = 40;
@@ -112,7 +116,8 @@ public final class DashMotionTicker {
         private final double speed;
         private final Vec3 originEye;
         private final double eyeOffsetY;
-        private Vec3 lastPos;
+        private double lastProgress;
+        private int stalledTicks;
         private int tick;
 
         private ActiveDash(
@@ -138,16 +143,25 @@ public final class DashMotionTicker {
         private boolean step(ServerPlayer player) {
             tick++;
             Vec3 cur = player.position();
+            double progress = forwardProgress(startFeet, cur, direction);
 
-            // 撞墙检测：上一 tick 设了大速度，本 tick 玩家几乎没动 —— vanilla 物理被墙挡住了
-            if (lastPos != null && horizontalDistance(lastPos, cur) < STUCK_PROGRESS) {
-                emitEndParticles(cur);
-                return true;
+            // 撞墙检测看"沿冲刺方向的净进度"，并给起步两 tick 缓冲，
+            // 避免反向空中冲刺时被上一段惯性/同步抖动误判成卡墙。
+            if (tick > STUCK_GRACE_TICKS) {
+                if (progress - lastProgress < STUCK_PROGRESS) {
+                    stalledTicks++;
+                    if (stalledTicks >= STUCK_CONSECUTIVE_TICKS) {
+                        emitEndParticles(cur);
+                        return true;
+                    }
+                } else {
+                    stalledTicks = 0;
+                }
             }
-            lastPos = cur;
+            lastProgress = progress;
 
             // 走完目标距离，落幕
-            if (horizontalDistance(startFeet, cur) >= targetDistance - 0.05) {
+            if (progress >= targetDistance - 0.05) {
                 emitEndParticles(cur);
                 return true;
             }
@@ -167,10 +181,10 @@ public final class DashMotionTicker {
             DashToolItem.emitTrailParticles(level, originEye, targetEye);
         }
 
-        private static double horizontalDistance(Vec3 a, Vec3 b) {
-            double dx = a.x - b.x;
-            double dz = a.z - b.z;
-            return Math.sqrt(dx * dx + dz * dz);
+        private static double forwardProgress(Vec3 startFeet, Vec3 currentFeet, Vec3 direction) {
+            double dx = currentFeet.x - startFeet.x;
+            double dz = currentFeet.z - startFeet.z;
+            return dx * direction.x + dz * direction.z;
         }
     }
 }
