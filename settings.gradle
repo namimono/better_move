@@ -9,5 +9,5 @@ pluginManagement {
 	}
 }
 
-// Should match your modid
-rootProject.name = 'bettermove'
+// Project display name; modid remains "bettermove" for compatibility.
+rootProject.name = 'booster-mod'

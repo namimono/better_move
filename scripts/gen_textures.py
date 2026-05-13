@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""生成冲刺护腿 16x16 纹理（stdlib，无需 Pillow）。与 gen-textures.ps1 配色思路一致。"""
+"""生成推进器护腿 16x16 纹理（stdlib，无需 Pillow）。与 gen-textures.ps1 配色思路一致。"""
 from __future__ import annotations
 
 import struct

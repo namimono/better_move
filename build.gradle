@@ -18,7 +18,7 @@ loom {
 	splitEnvironmentSourceSets()
 
 	mods {
-		"bettermove" {
+		"booster" {
 			sourceSet sourceSets.main
 			sourceSet sourceSets.client
 		}

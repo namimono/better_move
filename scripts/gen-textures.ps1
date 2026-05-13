@@ -1,4 +1,4 @@
-# Generate 16x16 PNG textures for dash tool items (7 tiers + mod icon).
+# Generate 16x16 PNG textures for booster leggings items (7 tiers + mod icon).
 # Re-run after editing palette/shape: powershell -ExecutionPolicy Bypass -File scripts\gen-textures.ps1
 $ErrorActionPreference = "Stop"
 Add-Type -AssemblyName System.Drawing

@@ -1,0 +1,84 @@
+package com.bettermove;
+
+import com.bettermove.item.BoosterLeggingsItem;
+import com.bettermove.network.BoosterRequestPayload;
+import com.bettermove.tier.BoosterTier;
+import net.fabricmc.api.ModInitializer;
+import net.fabricmc.fabric.api.event.lifecycle.v1.ServerTickEvents;
+import net.fabricmc.fabric.api.itemgroup.v1.FabricItemGroup;
+import net.fabricmc.fabric.api.networking.v1.PayloadTypeRegistry;
+import net.fabricmc.fabric.api.networking.v1.ServerPlayNetworking;
+import net.minecraft.core.Registry;
+import net.minecraft.core.registries.BuiltInRegistries;
+import net.minecraft.network.chat.Component;
+import net.minecraft.resources.ResourceKey;
+import net.minecraft.resources.ResourceLocation;
+import net.minecraft.world.item.CreativeModeTab;
+import net.minecraft.world.item.Item;
+import net.minecraft.world.item.ItemStack;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+public class BoosterMod implements ModInitializer {
+    public static final String MOD_ID = "bettermove";
+    public static final Logger LOGGER = LoggerFactory.getLogger(MOD_ID);
+
+    public static final Item BOOSTER_LEGGINGS_WOOD = registerBoosterLeggings(BoosterTier.WOOD);
+    public static final Item BOOSTER_LEGGINGS_STONE = registerBoosterLeggings(BoosterTier.STONE);
+    public static final Item BOOSTER_LEGGINGS_COPPER = registerBoosterLeggings(BoosterTier.COPPER);
+    public static final Item BOOSTER_LEGGINGS_IRON = registerBoosterLeggings(BoosterTier.IRON);
+    public static final Item BOOSTER_LEGGINGS_GOLD = registerBoosterLeggings(BoosterTier.GOLD);
+    public static final Item BOOSTER_LEGGINGS_DIAMOND = registerBoosterLeggings(BoosterTier.DIAMOND);
+    public static final Item BOOSTER_LEGGINGS_NETHERITE = registerBoosterLeggings(BoosterTier.NETHERITE);
+
+    public static final ResourceKey<CreativeModeTab> ITEM_GROUP_KEY =
+            ResourceKey.create(BuiltInRegistries.CREATIVE_MODE_TAB.key(), id("main"));
+
+    @Override
+    public void onInitialize() {
+        Registry.register(
+                BuiltInRegistries.CREATIVE_MODE_TAB,
+                ITEM_GROUP_KEY,
+                FabricItemGroup.builder()
+                        .icon(() -> new ItemStack(BOOSTER_LEGGINGS_DIAMOND))
+                        .title(Component.translatable("itemGroup.bettermove.main"))
+                        .displayItems((params, output) -> {
+                            output.accept(BOOSTER_LEGGINGS_WOOD);
+                            output.accept(BOOSTER_LEGGINGS_STONE);
+                            output.accept(BOOSTER_LEGGINGS_COPPER);
+                            output.accept(BOOSTER_LEGGINGS_IRON);
+                            output.accept(BOOSTER_LEGGINGS_GOLD);
+                            output.accept(BOOSTER_LEGGINGS_DIAMOND);
+                            output.accept(BOOSTER_LEGGINGS_NETHERITE);
+                        })
+                        .build()
+        );
+
+        // 资源 id 仍保留 dash_request，兼容当前协议标识。
+        PayloadTypeRegistry.playC2S().register(BoosterRequestPayload.TYPE, BoosterRequestPayload.CODEC);
+
+        ServerPlayNetworking.registerGlobalReceiver(BoosterRequestPayload.TYPE, (payload, context) ->
+                context.server().execute(() ->
+                        BoosterLeggingsItem.tryBoostFromKey(context.player(), payload.dirX(), payload.dirZ()))
+        );
+
+        ServerTickEvents.END_SERVER_TICK.register(BoosterLeggingsItem::tickActiveMotions);
+
+        LOGGER.info("Booster Mod initialized.");
+    }
+
+    private static Item registerBoosterLeggings(BoosterTier tier) {
+        String name = "dash_tool_" + tier.getId();
+        ResourceLocation location = id(name);
+        ResourceKey<Item> key = ResourceKey.create(BuiltInRegistries.ITEM.key(), location);
+        Item.Properties properties = new Item.Properties()
+                .stacksTo(1)
+                .durability(tier.getDurability());
+        BoosterLeggingsItem item = new BoosterLeggingsItem(properties, tier);
+        return Registry.register(BuiltInRegistries.ITEM, key, item);
+    }
+
+    public static ResourceLocation id(String path) {
+        return ResourceLocation.fromNamespaceAndPath(MOD_ID, path);
+    }
+}

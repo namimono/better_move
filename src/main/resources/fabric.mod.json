@@ -2,8 +2,8 @@
 	"schemaVersion": 1,
 	"id": "bettermove",
 	"version": "${version}",
-	"name": "Better Move",
-	"description": "可升级的位移装备：装备到腿部槽位，按下冲刺键沿移动方向分段冲刺突进。",
+	"name": "Booster Mod",
+	"description": "可升级的推进器护腿模组：装备到腿部槽位，按下推进键沿移动方向进行喷射推进。",
 	"authors": [
 		"Gigabyte"
 	],
@@ -14,10 +14,10 @@
 	"environment": "*",
 	"entrypoints": {
 		"main": [
-			"com.bettermove.BetterMoveMod"
+			"com.bettermove.BoosterMod"
 		],
 		"client": [
-			"com.bettermove.client.BetterMoveModClient"
+			"com.bettermove.client.BoosterModClient"
 		]
 	},
 	"depends": {

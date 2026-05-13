@@ -1,12 +1,12 @@
 {
-	"itemGroup.bettermove.main": "更好的移动",
-	"item.bettermove.dash_tool_wood": "木质冲刺护腿",
-	"item.bettermove.dash_tool_stone": "石质冲刺护腿",
-	"item.bettermove.dash_tool_copper": "铜质冲刺护腿",
-	"item.bettermove.dash_tool_iron": "铁质冲刺护腿",
-	"item.bettermove.dash_tool_gold": "金质冲刺护腿",
-	"item.bettermove.dash_tool_diamond": "钻石冲刺护腿",
-	"item.bettermove.dash_tool_netherite": "下界合金冲刺护腿",
-	"key.categories.bettermove": "更好的移动",
-	"key.bettermove.dash": "冲刺"
+	"itemGroup.bettermove.main": "推进器模组",
+	"item.bettermove.dash_tool_wood": "木质推进器护腿",
+	"item.bettermove.dash_tool_stone": "石质推进器护腿",
+	"item.bettermove.dash_tool_copper": "铜质推进器护腿",
+	"item.bettermove.dash_tool_iron": "铁质推进器护腿",
+	"item.bettermove.dash_tool_gold": "金质推进器护腿",
+	"item.bettermove.dash_tool_diamond": "钻石推进器护腿",
+	"item.bettermove.dash_tool_netherite": "下界合金推进器护腿",
+	"key.categories.bettermove": "推进器模组",
+	"key.bettermove.dash": "推进"
 }

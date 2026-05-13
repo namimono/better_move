@@ -2,7 +2,7 @@
 
 ## Project Overview
 
-**BetterMove** — Minecraft 1.21.1 Fabric mod adding upgradeable "Dash Leggings" (5 tiers: Wood → Netherite). Players press `Z` to dash along line of sight. Client→server networking model with server-side validation.
+**Booster Mod** — Minecraft 1.21.1 Fabric mod adding upgradeable "Booster Leggings" (7 tiers: Wood → Netherite). Players press `Z` to trigger a jet-style boost. Client→server networking model with server-side validation.
 
 **Tech stack**: Java 21, Gradle 9.4.1 (wrapper), Fabric Loom 1.16-SNAPSHOT, Fabric API 0.116.11+1.21.1.
 
