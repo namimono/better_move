@@ -1,8 +1,8 @@
-package com.bettermove;
+package com.boostermod;
 
-import com.bettermove.item.BoosterLeggingsItem;
-import com.bettermove.network.BoosterRequestPayload;
-import com.bettermove.tier.BoosterTier;
+import com.boostermod.item.BoosterLeggingsItem;
+import com.boostermod.network.BoosterRequestPayload;
+import com.boostermod.tier.BoosterTier;
 import net.fabricmc.api.ModInitializer;
 import net.fabricmc.fabric.api.event.lifecycle.v1.ServerTickEvents;
 import net.fabricmc.fabric.api.itemgroup.v1.FabricItemGroup;
@@ -20,7 +20,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 public class BoosterMod implements ModInitializer {
-    public static final String MOD_ID = "bettermove";
+    public static final String MOD_ID = "boostermod";
     public static final Logger LOGGER = LoggerFactory.getLogger(MOD_ID);
 
     public static final Item BOOSTER_LEGGINGS_WOOD = registerBoosterLeggings(BoosterTier.WOOD);
@@ -41,7 +41,7 @@ public class BoosterMod implements ModInitializer {
                 ITEM_GROUP_KEY,
                 FabricItemGroup.builder()
                         .icon(() -> new ItemStack(BOOSTER_LEGGINGS_DIAMOND))
-                        .title(Component.translatable("itemGroup.bettermove.main"))
+                        .title(Component.translatable("itemGroup.boostermod.main"))
                         .displayItems((params, output) -> {
                             output.accept(BOOSTER_LEGGINGS_WOOD);
                             output.accept(BOOSTER_LEGGINGS_STONE);
@@ -54,7 +54,6 @@ public class BoosterMod implements ModInitializer {
                         .build()
         );
 
-        // 资源 id 仍保留 dash_request，兼容当前协议标识。
         PayloadTypeRegistry.playC2S().register(BoosterRequestPayload.TYPE, BoosterRequestPayload.CODEC);
 
         ServerPlayNetworking.registerGlobalReceiver(BoosterRequestPayload.TYPE, (payload, context) ->
@@ -68,7 +67,7 @@ public class BoosterMod implements ModInitializer {
     }
 
     private static Item registerBoosterLeggings(BoosterTier tier) {
-        String name = "dash_tool_" + tier.getId();
+        String name = "booster_leggings_" + tier.getId();
         ResourceLocation location = id(name);
         ResourceKey<Item> key = ResourceKey.create(BuiltInRegistries.ITEM.key(), location);
         Item.Properties properties = new Item.Properties()

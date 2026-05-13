@@ -4,7 +4,7 @@ $ErrorActionPreference = "Stop"
 Add-Type -AssemblyName System.Drawing
 
 $repoRoot = Split-Path -Parent $PSScriptRoot
-$root = Join-Path $repoRoot "src/main/resources/assets/bettermove"
+$root = Join-Path $repoRoot "src/main/resources/assets/boostermod"
 $outDir = Join-Path $root "textures/item"
 $null = New-Item -ItemType Directory -Force -Path $outDir
 
@@ -42,13 +42,13 @@ function MakeTex { param($path, $handleHex, $headHex, $lightHex, $darkHex)
 
 # (id, handle, head, light, dark)
 $tiers = @(
-    @("dash_tool_wood",      "#6E4A23","#A57033","#D5A66B","#3D2811"),
-    @("dash_tool_stone",     "#6E4A23","#8A8A8A","#C0C0C0","#3C3C3C"),
-    @("dash_tool_copper",    "#6E4A23","#C46B43","#F0A57C","#5A2C18"),
-    @("dash_tool_iron",      "#6E4A23","#D8D8D8","#FFFFFF","#5C5C5C"),
-    @("dash_tool_gold",      "#6E4A23","#F9D74A","#FFF5B0","#8A6A12"),
-    @("dash_tool_diamond",   "#6E4A23","#5EDBD3","#B8FFFA","#1F6F69"),
-    @("dash_tool_netherite", "#6E4A23","#4A4144","#7A6D70","#1B1517")
+    @("booster_leggings_wood",      "#6E4A23","#A57033","#D5A66B","#3D2811"),
+    @("booster_leggings_stone",     "#6E4A23","#8A8A8A","#C0C0C0","#3C3C3C"),
+    @("booster_leggings_copper",    "#6E4A23","#C46B43","#F0A57C","#5A2C18"),
+    @("booster_leggings_iron",      "#6E4A23","#D8D8D8","#FFFFFF","#5C5C5C"),
+    @("booster_leggings_gold",      "#6E4A23","#F9D74A","#FFF5B0","#8A6A12"),
+    @("booster_leggings_diamond",   "#6E4A23","#5EDBD3","#B8FFFA","#1F6F69"),
+    @("booster_leggings_netherite", "#6E4A23","#4A4144","#7A6D70","#1B1517")
 )
 foreach($t in $tiers){ MakeTex (Join-Path $outDir ($t[0]+".png")) $t[1] $t[2] $t[3] $t[4] }
 MakeTex (Join-Path $root "icon.png") "#6E4A23" "#5EDBD3" "#B8FFFA" "#1F6F69"

@@ -1,7 +1,7 @@
-package com.bettermove.item;
+package com.boostermod.item;
 
-import com.bettermove.network.BoosterRequestPayload;
-import com.bettermove.tier.BoosterTier;
+import com.boostermod.network.BoosterRequestPayload;
+import com.boostermod.tier.BoosterTier;
 import net.minecraft.core.Holder;
 import net.minecraft.core.particles.ParticleTypes;
 import net.minecraft.server.MinecraftServer;
@@ -21,9 +21,6 @@ import net.minecraft.world.level.Level;
 import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.Vec3;
 
-/**
- * 推进器护腿。装备在玩家腿部槽位，按客户端绑定的推进键沿水平移动方向推进。
- */
 public class BoosterLeggingsItem extends Item implements Equipable {
     private static final int COOLDOWN_TICKS = 60;
     private static final float MOVEMENT_BOOST_HUNGER_EXHAUSTION = 1.0f;
@@ -35,11 +32,6 @@ public class BoosterLeggingsItem extends Item implements Equipable {
     private static final double STEP_UP_GRAIN = 0.05;
     private static final int MIN_FOOD_LEVEL = 6;
     private static final double MIN_CLIENT_DIRECTION_SQR = 1.0e-4;
-
-    /**
-     * 目前仍默认使用“移动方向推进”。
-     * 旧的“视线方向推进”逻辑先完整保留在代码里，后续可挂到装备升级项上。
-     */
     private static final BoostMode ACTIVE_BOOST_MODE = BoostMode.MOVEMENT_DIRECTION;
 
     private final BoosterTier tier;
@@ -52,10 +44,6 @@ public class BoosterLeggingsItem extends Item implements Equipable {
     public BoosterLeggingsItem(Properties properties, BoosterTier tier) {
         super(properties);
         this.tier = tier;
-    }
-
-    public BoosterTier getTier() {
-        return tier;
     }
 
     @Override
@@ -73,13 +61,6 @@ public class BoosterLeggingsItem extends Item implements Equipable {
         return this.swapWithEquipmentSlot(this, level, player, hand);
     }
 
-    /**
-     * 服务端按键入口：玩家按下推进键，由网络层路由到此处。
-     *
-     * <p>关键校验（装备 / 冷却 / 饥饿 / 距离）都以服务端权威状态为准。推进方向
-     * 由客户端在按键瞬间把自己当前输入意图对应的水平向量 ({@code clientDirX/Z}) 一并送上来。
-     * 这样空中残留惯性与当前按键相反时，推进仍然跟随玩家此刻的操作意图。</p>
-     */
     public static void tryBoostFromKey(ServerPlayer player, double clientDirX, double clientDirZ) {
         ItemStack legs = player.getItemBySlot(EquipmentSlot.LEGS);
         if (!(legs.getItem() instanceof BoosterLeggingsItem boosterItem)) {
@@ -108,7 +89,6 @@ public class BoosterLeggingsItem extends Item implements Equipable {
         player.swing(InteractionHand.MAIN_HAND, true);
     }
 
-    /** 每服务端 tick 推进进行中的推进插值；在模组主入口注册。 */
     public static void tickActiveMotions(MinecraftServer server) {
         BoosterMotionTicker.tickServer(server);
     }
@@ -166,10 +146,6 @@ public class BoosterLeggingsItem extends Item implements Equipable {
         return origin.add(bestOffset);
     }
 
-    /**
-     * 保留旧实现：直接沿视线方向扫描，允许向上/向下看时带 y 分量。
-     * 目前不启用，后续可挂到装备升级项或配置开关。
-     */
     private Vec3 findLookBoostTarget(Level level, Player player) {
         Vec3 lookVector = player.getViewVector(1.0f);
         if (lookVector.lengthSqr() < 1.0e-6) {
@@ -217,9 +193,6 @@ public class BoosterLeggingsItem extends Item implements Equipable {
         return origin.add(bestOffset);
     }
 
-    /**
-     * 尝试一个理想水平推进位移；若与方块碰撞，沿 +y 抬高最多 1 格再试。
-     */
     private static Vec3 tryFitOffset(Level level, Player player, AABB originBox, Vec3 nominal) {
         if (canFitOffset(level, player, originBox, nominal)) {
             return nominal;
@@ -244,12 +217,6 @@ public class BoosterLeggingsItem extends Item implements Equipable {
         return level.getEntityCollisions(player, movedBox).isEmpty();
     }
 
-    /**
-     * 优先取玩家当前水平移动方向作为推进朝向；没有输入时退化到水平视线方向。
-     *
-     * <p>水平输入方向由客户端在按键瞬间按当前前后左右输入换算后随包送上来。
-     * 原因见 {@link BoosterRequestPayload} 注释：服务端拿不到玩家这一刻的原始输入意图。</p>
-     */
     private static Vec3 horizontalBoostDirection(Player player, double clientDirX, double clientDirZ) {
         Vec3 horizontalMove = new Vec3(clientDirX, 0.0, clientDirZ);
         if (horizontalMove.lengthSqr() > MIN_CLIENT_DIRECTION_SQR) {
@@ -316,7 +283,6 @@ public class BoosterLeggingsItem extends Item implements Equipable {
         );
     }
 
-    /** 保留旧实现：服务端直接瞬移到扫描终点。 */
     private void applyLookBoost(ServerLevel level, ServerPlayer player, ItemStack legsStack, Vec3 targetFeet) {
         Vec3 originEye = player.getEyePosition();
         double eyeOffsetY = player.getEyeY() - player.getY();
@@ -336,7 +302,6 @@ public class BoosterLeggingsItem extends Item implements Equipable {
         emitTrailParticles(level, originEye, targetEye);
     }
 
-    /** 沿轨迹播洒云粒子，强化推进的视觉反馈。 */
     static void emitTrailParticles(ServerLevel level, Vec3 from, Vec3 to) {
         double distance = from.distanceTo(to);
         int count = Math.max(4, (int) (distance * 4));

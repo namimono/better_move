@@ -1,0 +1,12 @@
+{
+	"itemGroup.boostermod.main": "Booster Mod",
+	"item.boostermod.booster_leggings_wood": "Wooden Booster Leggings",
+	"item.boostermod.booster_leggings_stone": "Stone Booster Leggings",
+	"item.boostermod.booster_leggings_copper": "Copper Booster Leggings",
+	"item.boostermod.booster_leggings_iron": "Iron Booster Leggings",
+	"item.boostermod.booster_leggings_gold": "Golden Booster Leggings",
+	"item.boostermod.booster_leggings_diamond": "Diamond Booster Leggings",
+	"item.boostermod.booster_leggings_netherite": "Netherite Booster Leggings",
+	"key.categories.boostermod": "Booster Mod",
+	"key.boostermod.boost": "Boost"
+}

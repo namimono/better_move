@@ -9,16 +9,13 @@ Minecraft 1.21.1 Fabric 模组。核心装备是可升级的推进器护腿，�
 - 装备：木、石、铜、铁、金、钻石、下界合金 7 个等级
 - 操作：默认按键 `Z`，按下时读取当前移动输入方向作为推进方向
 
-## 兼容策略
+## 当前标识
 
-这轮只迁移模组主题和命名，不主动破坏现有资源与存档兼容：
-
-- `modid` 仍然是 `bettermove`
-- 物品注册名仍然是 `dash_tool_*`
-- 资源目录仍然是 `assets/bettermove/...`
-- 网络包 id 仍然是 `dash_request`
-
-这样现有世界、物品栈、语言 key、模型与纹理路径都还能继续工作。后续如果要彻底把底层 id 也迁成 `booster_*`，建议单独做一轮兼容迁移。
+- `modid`: `boostermod`
+- Java 包名：`com.boostermod`
+- 物品注册名：`booster_leggings_*`
+- 资源目录：`assets/boostermod/...`
+- 网络包 id：`booster_request`
 
 ## 开发
 

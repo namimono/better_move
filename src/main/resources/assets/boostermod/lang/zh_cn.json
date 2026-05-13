@@ -1,0 +1,12 @@
+{
+	"itemGroup.boostermod.main": "推进器模组",
+	"item.boostermod.booster_leggings_wood": "木质推进器护腿",
+	"item.boostermod.booster_leggings_stone": "石质推进器护腿",
+	"item.boostermod.booster_leggings_copper": "铜质推进器护腿",
+	"item.boostermod.booster_leggings_iron": "铁质推进器护腿",
+	"item.boostermod.booster_leggings_gold": "金质推进器护腿",
+	"item.boostermod.booster_leggings_diamond": "钻石推进器护腿",
+	"item.boostermod.booster_leggings_netherite": "下界合金推进器护腿",
+	"key.categories.boostermod": "推进器模组",
+	"key.boostermod.boost": "推进"
+}

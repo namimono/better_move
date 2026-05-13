@@ -1,8 +1,7 @@
-package com.bettermove.tier;
+package com.boostermod.tier;
 
 /**
  * 推进器护腿的等级。每个等级决定推进的最大距离、巡航速度、喷射曲线参数与耐久度。
- * 冷却时间所有等级共享，参见 {@code BoosterLeggingsItem.COOLDOWN_TICKS}。
  */
 public enum BoosterTier {
     WOOD("wood", 5.0, 0.65, 1.08, 0.42, 60),
@@ -39,27 +38,22 @@ public enum BoosterTier {
         return id;
     }
 
-    /** 推进最大距离（方块/格）。 */
     public double getDistance() {
         return distance;
     }
 
-    /** 推进巡航速度（格/tick）。 */
     public double getSpeed() {
         return speed;
     }
 
-    /** 喷射曲线峰值倍率，决定点火阶段的爆发强度。 */
     public double getBoostStrength() {
         return boostStrength;
     }
 
-    /** 末段最小速度倍率，越低越像推进器断推。 */
     public double getEndSpeedMultiplier() {
         return endSpeedMultiplier;
     }
 
-    /** 物品最大耐久。 */
     public int getDurability() {
         return durability;
     }

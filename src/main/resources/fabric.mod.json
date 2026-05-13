@@ -1,6 +1,6 @@
 {
 	"schemaVersion": 1,
-	"id": "bettermove",
+	"id": "boostermod",
 	"version": "${version}",
 	"name": "Booster Mod",
 	"description": "可升级的推进器护腿模组：装备到腿部槽位，按下推进键沿移动方向进行喷射推进。",
@@ -10,14 +10,14 @@
 	"contact": {
 	},
 	"license": "CC0-1.0",
-	"icon": "assets/bettermove/icon.png",
+	"icon": "assets/boostermod/icon.png",
 	"environment": "*",
 	"entrypoints": {
 		"main": [
-			"com.bettermove.BoosterMod"
+			"com.boostermod.BoosterMod"
 		],
 		"client": [
-			"com.bettermove.client.BoosterModClient"
+			"com.boostermod.client.BoosterModClient"
 		]
 	},
 	"depends": {
