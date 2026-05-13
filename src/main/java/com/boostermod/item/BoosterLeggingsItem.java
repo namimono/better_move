@@ -1,5 +1,7 @@
 package com.boostermod.item;
 
+import com.boostermod.balance.BoosterBalanceManager;
+import com.boostermod.balance.BoosterBalanceProfile;
 import com.boostermod.network.BoosterRequestPayload;
 import com.boostermod.tier.BoosterTier;
 import net.minecraft.core.Holder;
@@ -108,7 +110,7 @@ public class BoosterLeggingsItem extends Item implements Equipable {
 
         AABB originBox = player.getBoundingBox();
         Vec3 origin = player.position();
-        double maxDistance = tier.getDistance();
+        double maxDistance = currentBalance((ServerLevel) level).distance();
         double bestProgress = 0.0;
         Vec3 bestOffset = Vec3.ZERO;
         boolean blocked = false;
@@ -155,7 +157,7 @@ public class BoosterLeggingsItem extends Item implements Equipable {
 
         AABB originBox = player.getBoundingBox();
         Vec3 origin = player.position();
-        double maxDistance = tier.getDistance();
+        double maxDistance = currentBalance((ServerLevel) level).distance();
         double bestProgress = 0.0;
         Vec3 bestOffset = Vec3.ZERO;
         boolean blocked = false;
@@ -253,6 +255,7 @@ public class BoosterLeggingsItem extends Item implements Equipable {
             ItemStack legsStack,
             Vec3 startFeet,
             Vec3 targetFeet) {
+        BoosterBalanceProfile balance = currentBalance(level);
         Vec3 originEye = player.getEyePosition();
         double eyeOffsetY = player.getEyeY() - player.getY();
 
@@ -277,7 +280,7 @@ public class BoosterLeggingsItem extends Item implements Equipable {
                 startFeet,
                 horizontalDistance,
                 boostDirection,
-                tier,
+                balance,
                 originEye,
                 eyeOffsetY
         );
@@ -310,5 +313,9 @@ public class BoosterLeggingsItem extends Item implements Equipable {
             Vec3 point = from.lerp(to, t);
             level.sendParticles(ParticleTypes.CLOUD, point.x, point.y, point.z, 1, 0.05, 0.05, 0.05, 0.0);
         }
+    }
+
+    private BoosterBalanceProfile currentBalance(ServerLevel level) {
+        return BoosterBalanceManager.get(level.getServer()).getProfile(tier);
     }
 }

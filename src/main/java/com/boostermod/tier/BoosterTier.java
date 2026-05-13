@@ -54,6 +54,22 @@ public enum BoosterTier {
         return endSpeedMultiplier;
     }
 
+    public double getDefaultDistance() {
+        return distance;
+    }
+
+    public double getDefaultSpeed() {
+        return speed;
+    }
+
+    public double getDefaultBoostStrength() {
+        return boostStrength;
+    }
+
+    public double getDefaultEndSpeedMultiplier() {
+        return endSpeedMultiplier;
+    }
+
     public int getDurability() {
         return durability;
     }

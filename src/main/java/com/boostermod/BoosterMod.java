@@ -1,9 +1,11 @@
 package com.boostermod;
 
+import com.boostermod.command.BoosterModCommand;
 import com.boostermod.item.BoosterLeggingsItem;
 import com.boostermod.network.BoosterRequestPayload;
 import com.boostermod.tier.BoosterTier;
 import net.fabricmc.api.ModInitializer;
+import net.fabricmc.fabric.api.command.v2.CommandRegistrationCallback;
 import net.fabricmc.fabric.api.event.lifecycle.v1.ServerTickEvents;
 import net.fabricmc.fabric.api.itemgroup.v1.FabricItemGroup;
 import net.fabricmc.fabric.api.networking.v1.PayloadTypeRegistry;
@@ -61,6 +63,8 @@ public class BoosterMod implements ModInitializer {
                         BoosterLeggingsItem.tryBoostFromKey(context.player(), payload.dirX(), payload.dirZ()))
         );
 
+        CommandRegistrationCallback.EVENT.register((dispatcher, registryAccess, environment) ->
+                BoosterModCommand.register(dispatcher));
         ServerTickEvents.END_SERVER_TICK.register(BoosterLeggingsItem::tickActiveMotions);
 
         LOGGER.info("Booster Mod initialized.");
