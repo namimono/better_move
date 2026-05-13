@@ -42,22 +42,22 @@ public enum DashTier {
     }
 
     /** 突进最大距离（方块/格）。 */
-    public double getDistance() {
+    public double getDefaultDistance() {
         return distance;
     }
 
     /** 冲刺水平速度（格/tick）。 */
-    public double getSpeed() {
+    public double getDefaultSpeed() {
         return speed;
     }
 
     /** 喷射曲线峰值倍率，决定点火阶段的爆发强度。 */
-    public double getBoostStrength() {
+    public double getDefaultBoostStrength() {
         return boostStrength;
     }
 
     /** 末段最小速度倍率，越低越像推进器断推。 */
-    public double getEndSpeedMultiplier() {
+    public double getDefaultEndSpeedMultiplier() {
         return endSpeedMultiplier;
     }
 

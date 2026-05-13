@@ -1,9 +1,11 @@
 package com.bettermove;
 
+import com.bettermove.command.BetterMoveCommand;
 import com.bettermove.item.DashToolItem;
 import com.bettermove.network.DashRequestPayload;
 import com.bettermove.tier.DashTier;
 import net.fabricmc.api.ModInitializer;
+import net.fabricmc.fabric.api.command.v2.CommandRegistrationCallback;
 import net.fabricmc.fabric.api.event.lifecycle.v1.ServerTickEvents;
 import net.fabricmc.fabric.api.itemgroup.v1.FabricItemGroup;
 import net.fabricmc.fabric.api.networking.v1.PayloadTypeRegistry;
@@ -66,6 +68,8 @@ public class BetterMoveMod implements ModInitializer {
                         DashToolItem.tryDashFromKey(context.player(), payload.dirX(), payload.dirZ()))
         );
 
+        CommandRegistrationCallback.EVENT.register((dispatcher, registryAccess, environment) ->
+                BetterMoveCommand.register(dispatcher));
         ServerTickEvents.END_SERVER_TICK.register(DashToolItem::tickActiveMotions);
 
         LOGGER.info("Better Move initialized.");

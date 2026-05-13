@@ -1,5 +1,7 @@
 package com.bettermove.item;
 
+import com.bettermove.balance.DashBalanceManager;
+import com.bettermove.balance.DashBalanceProfile;
 import com.bettermove.network.DashRequestPayload;
 import com.bettermove.tier.DashTier;
 import net.minecraft.core.Holder;
@@ -153,7 +155,7 @@ public class DashToolItem extends Item implements Equipable {
      *
      * @return 可前进的目标坐标；若沿该方向推进 < {@value #MIN_DASH_DISTANCE} 格视为无效
      */
-    private Vec3 findDashTarget(Level level, Player player, double clientDirX, double clientDirZ) {
+    private Vec3 findDashTarget(ServerLevel level, Player player, double clientDirX, double clientDirZ) {
         return switch (ACTIVE_DASH_MODE) {
             case MOVEMENT_DIRECTION -> findMovementDashTarget(level, player, clientDirX, clientDirZ);
             case LOOK_DIRECTION -> findLookDashTarget(level, player);
@@ -163,7 +165,7 @@ public class DashToolItem extends Item implements Equipable {
     /**
      * 当前启用的实现：优先按玩家水平移动方向扫描；站立时退化到水平视线方向。
      */
-    private Vec3 findMovementDashTarget(Level level, Player player, double clientDirX, double clientDirZ) {
+    private Vec3 findMovementDashTarget(ServerLevel level, Player player, double clientDirX, double clientDirZ) {
         Vec3 dir = horizontalDashDirection(player, clientDirX, clientDirZ);
         if (dir.lengthSqr() < 1.0e-6) {
             return null;
@@ -171,7 +173,7 @@ public class DashToolItem extends Item implements Equipable {
 
         AABB origBox = player.getBoundingBox();
         Vec3 origin = player.position();
-        double maxDist = tier.getDistance();
+        double maxDist = currentBalance(level).distance();
 
         // bestT: 沿冲刺方向的标称推进距离（决定有没有"前进"）
         // bestOffset: 经过 step-up 修正后的实际位移（决定玩家最终落点）
@@ -218,7 +220,7 @@ public class DashToolItem extends Item implements Equipable {
      * 保留 main 分支旧实现：直接沿视线方向扫描，允许向上/向下看时带 y 分量。
      * 目前不启用，后续可挂到装备升级项或配置开关。
      */
-    private Vec3 findLookDashTarget(Level level, Player player) {
+    private Vec3 findLookDashTarget(ServerLevel level, Player player) {
         Vec3 lookVec = player.getViewVector(1.0f);
         if (lookVec.lengthSqr() < 1.0e-6) {
             return null;
@@ -227,7 +229,7 @@ public class DashToolItem extends Item implements Equipable {
 
         AABB origBox = player.getBoundingBox();
         Vec3 origin = player.position();
-        double maxDist = tier.getDistance();
+        double maxDist = currentBalance(level).distance();
 
         double bestT = 0.0;
         Vec3 bestOffset = Vec3.ZERO;
@@ -349,6 +351,7 @@ public class DashToolItem extends Item implements Equipable {
             ItemStack legsStack,
             Vec3 startFeet,
             Vec3 targetFeet) {
+        DashBalanceProfile balance = currentBalance(level);
         Vec3 originEye = player.getEyePosition();
         double eyeOffsetY = player.getEyeY() - player.getY();
 
@@ -369,7 +372,7 @@ public class DashToolItem extends Item implements Equipable {
         }
         Vec3 dashDir = new Vec3(dx / horizDistance, 0.0, dz / horizDistance);
 
-        DashMotionTicker.start(level, player, startFeet, horizDistance, dashDir, tier, originEye, eyeOffsetY);
+        DashMotionTicker.start(level, player, startFeet, horizDistance, dashDir, balance, originEye, eyeOffsetY);
     }
 
     /** 保留 main 分支旧实现：服务端直接瞬移到扫描终点。 */
@@ -401,5 +404,9 @@ public class DashToolItem extends Item implements Equipable {
             Vec3 p = from.lerp(to, t);
             level.sendParticles(ParticleTypes.CLOUD, p.x, p.y, p.z, 1, 0.05, 0.05, 0.05, 0.0);
         }
+    }
+
+    private DashBalanceProfile currentBalance(ServerLevel level) {
+        return DashBalanceManager.get(level.getServer()).getProfile(tier);
     }
 }

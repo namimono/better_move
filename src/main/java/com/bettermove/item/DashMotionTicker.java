@@ -1,5 +1,6 @@
 package com.bettermove.item;
 
+import com.bettermove.balance.DashBalanceProfile;
 import com.bettermove.tier.DashTier;
 import java.util.Iterator;
 import java.util.Map;
@@ -61,15 +62,15 @@ public final class DashMotionTicker {
             Vec3 startFeet,
             double targetDistance,
             Vec3 direction,
-            DashTier tier,
+            DashBalanceProfile profile,
             Vec3 originEye,
             double eyeOffsetY) {
-        double speed = tier.getSpeed();
+        double speed = profile.speed();
         int plannedTicks = estimatePlannedTicks(targetDistance, speed);
-        applyVelocity(player, direction, speedForTick(tier, tickProgress(0, plannedTicks)));
+        applyVelocity(player, direction, speedForTick(profile, tickProgress(0, plannedTicks)));
         ACTIVE.put(
                 player.getUUID(),
-                new ActiveDash(level, startFeet, direction, targetDistance, tier, plannedTicks, originEye, eyeOffsetY));
+                new ActiveDash(level, startFeet, direction, targetDistance, profile, plannedTicks, originEye, eyeOffsetY));
     }
 
     /**
@@ -115,7 +116,7 @@ public final class DashMotionTicker {
         private final Vec3 startFeet;
         private final Vec3 direction;
         private final double targetDistance;
-        private final DashTier tier;
+        private final DashBalanceProfile profile;
         private final int plannedTicks;
         private final Vec3 originEye;
         private final double eyeOffsetY;
@@ -128,7 +129,7 @@ public final class DashMotionTicker {
                 Vec3 startFeet,
                 Vec3 direction,
                 double targetDistance,
-                DashTier tier,
+                DashBalanceProfile profile,
                 int plannedTicks,
                 Vec3 originEye,
                 double eyeOffsetY) {
@@ -136,7 +137,7 @@ public final class DashMotionTicker {
             this.startFeet = startFeet;
             this.direction = direction;
             this.targetDistance = targetDistance;
-            this.tier = tier;
+            this.profile = profile;
             this.plannedTicks = plannedTicks;
             this.originEye = originEye;
             this.eyeOffsetY = eyeOffsetY;
@@ -177,7 +178,7 @@ public final class DashMotionTicker {
             }
 
             // 喷射推进：前段快速点火，中段持续推力，末段快速断推。
-            applyVelocity(player, direction, speedForTick(tier, tickProgress(tick, plannedTicks)));
+            applyVelocity(player, direction, speedForTick(profile, tickProgress(tick, plannedTicks)));
             return false;
         }
 
@@ -204,13 +205,13 @@ public final class DashMotionTicker {
         return Math.min(1.0, (double) tick / (plannedTicks - 1));
     }
 
-    private static double speedForTick(DashTier tier, double progress) {
-        return tier.getSpeed() * jetSpeedMultiplier(progress, tier);
+    private static double speedForTick(DashBalanceProfile profile, double progress) {
+        return profile.speed() * jetSpeedMultiplier(progress, profile);
     }
 
-    private static double jetSpeedMultiplier(double progress, DashTier tier) {
-        double peakMultiplier = tier.getBoostStrength();
-        double endMultiplier = tier.getEndSpeedMultiplier();
+    private static double jetSpeedMultiplier(double progress, DashBalanceProfile profile) {
+        double peakMultiplier = profile.boostStrength();
+        double endMultiplier = profile.endSpeedMultiplier();
         if (progress < 0.15) {
             return lerp(progress / 0.15, 0.90, peakMultiplier);
         }
