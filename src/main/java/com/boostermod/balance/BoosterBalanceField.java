@@ -3,48 +3,38 @@ package com.boostermod.balance;
 import com.boostermod.tier.BoosterTier;
 
 public enum BoosterBalanceField {
-    DISTANCE("distance") {
+    IMPULSE("impulse") {
         @Override
         public double readDefault(BoosterTier tier) {
-            return tier.getDefaultDistance();
+            return tier.getDefaultImpulse();
         }
 
         @Override
         public BoosterBalanceProfile update(BoosterBalanceProfile profile, double value) {
-            return new BoosterBalanceProfile(value, profile.speed(), profile.boostStrength(), profile.endSpeedMultiplier());
+            return new BoosterBalanceProfile(value, profile.thrustPerTick(), profile.thrustTicks());
         }
     },
-    SPEED("speed") {
+    THRUST_PER_TICK("thrustPerTick") {
         @Override
         public double readDefault(BoosterTier tier) {
-            return tier.getDefaultSpeed();
+            return tier.getDefaultThrustPerTick();
         }
 
         @Override
         public BoosterBalanceProfile update(BoosterBalanceProfile profile, double value) {
-            return new BoosterBalanceProfile(profile.distance(), value, profile.boostStrength(), profile.endSpeedMultiplier());
+            return new BoosterBalanceProfile(profile.impulse(), value, profile.thrustTicks());
         }
     },
-    BOOST_STRENGTH("boostStrength") {
+    THRUST_TICKS("thrustTicks") {
         @Override
         public double readDefault(BoosterTier tier) {
-            return tier.getDefaultBoostStrength();
+            return tier.getDefaultThrustTicks();
         }
 
         @Override
         public BoosterBalanceProfile update(BoosterBalanceProfile profile, double value) {
-            return new BoosterBalanceProfile(profile.distance(), profile.speed(), value, profile.endSpeedMultiplier());
-        }
-    },
-    END_SPEED_MULTIPLIER("endSpeedMultiplier") {
-        @Override
-        public double readDefault(BoosterTier tier) {
-            return tier.getDefaultEndSpeedMultiplier();
-        }
-
-        @Override
-        public BoosterBalanceProfile update(BoosterBalanceProfile profile, double value) {
-            return new BoosterBalanceProfile(profile.distance(), profile.speed(), profile.boostStrength(), value);
+            int ticks = (int) Math.max(0, Math.round(value));
+            return new BoosterBalanceProfile(profile.impulse(), profile.thrustPerTick(), ticks);
         }
     };
 

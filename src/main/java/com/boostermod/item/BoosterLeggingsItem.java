@@ -2,7 +2,6 @@ package com.boostermod.item;
 
 import com.boostermod.balance.BoosterBalanceManager;
 import com.boostermod.balance.BoosterBalanceProfile;
-import com.boostermod.network.BoosterRequestPayload;
 import com.boostermod.tier.BoosterTier;
 import net.minecraft.core.Holder;
 import net.minecraft.core.particles.ParticleTypes;
@@ -26,22 +25,15 @@ import net.minecraft.world.phys.Vec3;
 public class BoosterLeggingsItem extends Item implements Equipable {
     private static final int COOLDOWN_TICKS = 60;
     private static final float MOVEMENT_BOOST_HUNGER_EXHAUSTION = 1.0f;
-    private static final float LOOK_BOOST_HUNGER_EXHAUSTION = 2.0f;
-    private static final double SCAN_STEP = 0.25;
-    private static final int REFINE_ITERS = 5;
-    private static final double MIN_BOOST_DISTANCE = 0.1;
-    private static final double STEP_UP_MAX = 1.0;
-    private static final double STEP_UP_GRAIN = 0.05;
+    /** 起跳前的最小前向探测距离：若该格内无法容纳玩家，则视为贴墙，不消耗冷却。 */
+    private static final double FORWARD_PROBE_DISTANCE = 0.1;
+    /** 探测前向时允许上抬的最大高度（与 {@link BoosterMotionTicker} 的 step height 提升保持一致）。 */
+    private static final double PROBE_STEP_UP_MAX = 1.0;
+    private static final double PROBE_STEP_UP_GRAIN = 0.05;
     private static final int MIN_FOOD_LEVEL = 6;
     private static final double MIN_CLIENT_DIRECTION_SQR = 1.0e-4;
-    private static final BoostMode ACTIVE_BOOST_MODE = BoostMode.MOVEMENT_DIRECTION;
 
     private final BoosterTier tier;
-
-    private enum BoostMode {
-        MOVEMENT_DIRECTION,
-        LOOK_DIRECTION
-    }
 
     public BoosterLeggingsItem(Properties properties, BoosterTier tier) {
         super(properties);
@@ -80,13 +72,12 @@ public class BoosterLeggingsItem extends Item implements Equipable {
         }
 
         ServerLevel level = player.serverLevel();
-        Vec3 startFeet = player.position();
-        Vec3 targetFeet = boosterItem.findBoostTarget(level, player, clientDirX, clientDirZ);
-        if (targetFeet == null) {
+        Vec3 direction = boosterItem.resolveBoostDirection(level, player, clientDirX, clientDirZ);
+        if (direction == null) {
             return;
         }
 
-        boosterItem.applyBoost(level, player, legs, startFeet, targetFeet);
+        boosterItem.applyBoost(level, player, legs, direction);
         player.getCooldowns().addCooldown(boosterItem, COOLDOWN_TICKS);
         player.swing(InteractionHand.MAIN_HAND, true);
     }
@@ -95,117 +86,33 @@ public class BoosterLeggingsItem extends Item implements Equipable {
         BoosterMotionTicker.tickServer(server);
     }
 
-    private Vec3 findBoostTarget(Level level, Player player, double clientDirX, double clientDirZ) {
-        return switch (ACTIVE_BOOST_MODE) {
-            case MOVEMENT_DIRECTION -> findMovementBoostTarget(level, player, clientDirX, clientDirZ);
-            case LOOK_DIRECTION -> findLookBoostTarget(level, player);
-        };
-    }
-
-    private Vec3 findMovementBoostTarget(Level level, Player player, double clientDirX, double clientDirZ) {
+    /**
+     * 计算推进方向并做一次性前向碰撞探测：方向非零且前方至少能容纳 {@link #FORWARD_PROBE_DISTANCE} 才放行。
+     * 实际飞行距离不再预先扫描，完全由 {@link BoosterMotionTicker} 的物理推力与 MC 引擎决定。
+     */
+    private Vec3 resolveBoostDirection(Level level, Player player, double clientDirX, double clientDirZ) {
         Vec3 direction = horizontalBoostDirection(player, clientDirX, clientDirZ);
         if (direction.lengthSqr() < 1.0e-6) {
             return null;
         }
-
         AABB originBox = player.getBoundingBox();
-        Vec3 origin = player.position();
-        double maxDistance = currentBalance((ServerLevel) level).distance();
-        double bestProgress = 0.0;
-        Vec3 bestOffset = Vec3.ZERO;
-        boolean blocked = false;
-
-        for (double distance = SCAN_STEP; distance <= maxDistance + 1.0e-6; distance += SCAN_STEP) {
-            Vec3 fitted = tryFitOffset(level, player, originBox, direction.scale(distance));
-            if (fitted != null) {
-                bestProgress = distance;
-                bestOffset = fitted;
-            } else {
-                blocked = true;
-                break;
-            }
-        }
-
-        if (blocked) {
-            double low = bestProgress;
-            double high = Math.min(bestProgress + SCAN_STEP, maxDistance);
-            for (int i = 0; i < REFINE_ITERS; i++) {
-                double mid = (low + high) * 0.5;
-                Vec3 fitted = tryFitOffset(level, player, originBox, direction.scale(mid));
-                if (fitted != null) {
-                    low = mid;
-                    bestOffset = fitted;
-                } else {
-                    high = mid;
-                }
-            }
-            bestProgress = low;
-        }
-
-        if (bestProgress < MIN_BOOST_DISTANCE) {
+        Vec3 probe = direction.scale(FORWARD_PROBE_DISTANCE);
+        if (!hasForwardClearance(level, player, originBox, probe)) {
             return null;
         }
-        return origin.add(bestOffset);
+        return direction;
     }
 
-    private Vec3 findLookBoostTarget(Level level, Player player) {
-        Vec3 lookVector = player.getViewVector(1.0f);
-        if (lookVector.lengthSqr() < 1.0e-6) {
-            return null;
+    private static boolean hasForwardClearance(Level level, Player player, AABB originBox, Vec3 probe) {
+        if (canFitOffset(level, player, originBox, probe)) {
+            return true;
         }
-        Vec3 direction = lookVector.normalize();
-
-        AABB originBox = player.getBoundingBox();
-        Vec3 origin = player.position();
-        double maxDistance = currentBalance((ServerLevel) level).distance();
-        double bestProgress = 0.0;
-        Vec3 bestOffset = Vec3.ZERO;
-        boolean blocked = false;
-
-        for (double distance = SCAN_STEP; distance <= maxDistance + 1.0e-6; distance += SCAN_STEP) {
-            Vec3 fitted = tryFitOffset(level, player, originBox, direction.scale(distance));
-            if (fitted != null) {
-                bestProgress = distance;
-                bestOffset = fitted;
-            } else {
-                blocked = true;
-                break;
+        for (double up = PROBE_STEP_UP_GRAIN; up <= PROBE_STEP_UP_MAX + 1.0e-6; up += PROBE_STEP_UP_GRAIN) {
+            if (canFitOffset(level, player, originBox, probe.add(0.0, up, 0.0))) {
+                return true;
             }
         }
-
-        if (blocked) {
-            double low = bestProgress;
-            double high = Math.min(bestProgress + SCAN_STEP, maxDistance);
-            for (int i = 0; i < REFINE_ITERS; i++) {
-                double mid = (low + high) * 0.5;
-                Vec3 fitted = tryFitOffset(level, player, originBox, direction.scale(mid));
-                if (fitted != null) {
-                    low = mid;
-                    bestOffset = fitted;
-                } else {
-                    high = mid;
-                }
-            }
-            bestProgress = low;
-        }
-
-        if (bestProgress < MIN_BOOST_DISTANCE) {
-            return null;
-        }
-        return origin.add(bestOffset);
-    }
-
-    private static Vec3 tryFitOffset(Level level, Player player, AABB originBox, Vec3 nominal) {
-        if (canFitOffset(level, player, originBox, nominal)) {
-            return nominal;
-        }
-        for (double up = STEP_UP_GRAIN; up <= STEP_UP_MAX + 1.0e-6; up += STEP_UP_GRAIN) {
-            Vec3 lifted = nominal.add(0.0, up, 0.0);
-            if (canFitOffset(level, player, originBox, lifted)) {
-                return lifted;
-            }
-        }
-        return null;
+        return false;
     }
 
     private static boolean canFitOffset(Level level, Player player, AABB originBox, Vec3 offset) {
@@ -237,24 +144,7 @@ public class BoosterLeggingsItem extends Item implements Equipable {
         return new Vec3(-Math.sin(yawRad), 0.0, Math.cos(yawRad)).normalize();
     }
 
-    private void applyBoost(
-            ServerLevel level,
-            ServerPlayer player,
-            ItemStack legsStack,
-            Vec3 startFeet,
-            Vec3 targetFeet) {
-        switch (ACTIVE_BOOST_MODE) {
-            case MOVEMENT_DIRECTION -> applyMovementBoost(level, player, legsStack, startFeet, targetFeet);
-            case LOOK_DIRECTION -> applyLookBoost(level, player, legsStack, targetFeet);
-        }
-    }
-
-    private void applyMovementBoost(
-            ServerLevel level,
-            ServerPlayer player,
-            ItemStack legsStack,
-            Vec3 startFeet,
-            Vec3 targetFeet) {
+    private void applyBoost(ServerLevel level, ServerPlayer player, ItemStack legsStack, Vec3 direction) {
         BoosterBalanceProfile balance = currentBalance(level);
         Vec3 originEye = player.getEyePosition();
         double eyeOffsetY = player.getEyeY() - player.getY();
@@ -267,42 +157,7 @@ public class BoosterLeggingsItem extends Item implements Equipable {
         level.playSound(null, originEye.x, originEye.y, originEye.z,
                 SoundEvents.BREEZE_SHOOT, SoundSource.PLAYERS, 1.0f, 1.2f);
 
-        double dx = targetFeet.x - startFeet.x;
-        double dz = targetFeet.z - startFeet.z;
-        double horizontalDistance = Math.sqrt(dx * dx + dz * dz);
-        if (horizontalDistance < MIN_BOOST_DISTANCE) {
-            return;
-        }
-        Vec3 boostDirection = new Vec3(dx / horizontalDistance, 0.0, dz / horizontalDistance);
-        BoosterMotionTicker.start(
-                level,
-                player,
-                startFeet,
-                horizontalDistance,
-                boostDirection,
-                balance,
-                originEye,
-                eyeOffsetY
-        );
-    }
-
-    private void applyLookBoost(ServerLevel level, ServerPlayer player, ItemStack legsStack, Vec3 targetFeet) {
-        Vec3 originEye = player.getEyePosition();
-        double eyeOffsetY = player.getEyeY() - player.getY();
-
-        player.teleportTo(targetFeet.x, targetFeet.y, targetFeet.z);
-        player.resetFallDistance();
-
-        player.causeFoodExhaustion(LOOK_BOOST_HUNGER_EXHAUSTION);
-        if (!player.getAbilities().instabuild) {
-            legsStack.hurtAndBreak(1, player, EquipmentSlot.LEGS);
-        }
-
-        level.playSound(null, originEye.x, originEye.y, originEye.z,
-                SoundEvents.BREEZE_SHOOT, SoundSource.PLAYERS, 1.0f, 1.2f);
-
-        Vec3 targetEye = targetFeet.add(0.0, eyeOffsetY, 0.0);
-        emitTrailParticles(level, originEye, targetEye);
+        BoosterMotionTicker.start(level, player, direction, balance, originEye, eyeOffsetY);
     }
 
     static void emitTrailParticles(ServerLevel level, Vec3 from, Vec3 to) {

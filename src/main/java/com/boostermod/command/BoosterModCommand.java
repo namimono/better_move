@@ -106,10 +106,9 @@ public final class BoosterModCommand {
         source.sendSuccess(
                 () -> Component.literal(
                         tier.getId()
-                                + " => distance=" + format(profile.distance())
-                                + ", speed=" + format(profile.speed())
-                                + ", boostStrength=" + format(profile.boostStrength())
-                                + ", endSpeedMultiplier=" + format(profile.endSpeedMultiplier())),
+                                + " => impulse=" + format(profile.impulse())
+                                + ", thrustPerTick=" + format(profile.thrustPerTick())
+                                + ", thrustTicks=" + profile.thrustTicks()),
                 false);
     }
 

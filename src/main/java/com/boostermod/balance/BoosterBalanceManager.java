@@ -145,10 +145,9 @@ public final class BoosterBalanceManager {
 
     private static BoosterBalanceProfile defaultsFor(BoosterTier tier) {
         return new BoosterBalanceProfile(
-                tier.getDefaultDistance(),
-                tier.getDefaultSpeed(),
-                tier.getDefaultBoostStrength(),
-                tier.getDefaultEndSpeedMultiplier());
+                tier.getDefaultImpulse(),
+                tier.getDefaultThrustPerTick(),
+                tier.getDefaultThrustTicks());
     }
 
     private Map<String, Map<String, Double>> toSerializableMap() {
@@ -156,10 +155,9 @@ public final class BoosterBalanceManager {
         for (BoosterTier tier : BoosterTier.values()) {
             BoosterBalanceProfile profile = profiles.get(tier);
             Map<String, Double> fields = new HashMap<>();
-            fields.put(BoosterBalanceField.DISTANCE.getId(), profile.distance());
-            fields.put(BoosterBalanceField.SPEED.getId(), profile.speed());
-            fields.put(BoosterBalanceField.BOOST_STRENGTH.getId(), profile.boostStrength());
-            fields.put(BoosterBalanceField.END_SPEED_MULTIPLIER.getId(), profile.endSpeedMultiplier());
+            fields.put(BoosterBalanceField.IMPULSE.getId(), profile.impulse());
+            fields.put(BoosterBalanceField.THRUST_PER_TICK.getId(), profile.thrustPerTick());
+            fields.put(BoosterBalanceField.THRUST_TICKS.getId(), (double) profile.thrustTicks());
             data.put(tier.getId(), fields);
         }
         return data;

@@ -1,20 +1,30 @@
 package com.boostermod.item;
 
+import com.boostermod.BoosterMod;
 import com.boostermod.balance.BoosterBalanceProfile;
 import java.util.Iterator;
 import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
+import net.minecraft.world.entity.ai.attributes.AttributeInstance;
+import net.minecraft.world.entity.ai.attributes.AttributeModifier;
+import net.minecraft.world.entity.ai.attributes.Attributes;
 import net.minecraft.world.phys.Vec3;
 
+/**
+ * 推进器运动管理：给玩家一个初始水平冲量，随后在 {@code thrustTicks} 个 tick 内
+ * 按线性衰减的方式追加推力，期间锁定 Y 速度为 0；推力阶段结束、撞墙或玩家离线即收尾。
+ * 实际飞行轨迹由 Minecraft 自身的物理引擎（空气阻力、碰撞）决定，本类不主动计算距离与曲线。
+ */
 public final class BoosterMotionTicker {
-    private static final double STUCK_PROGRESS = 0.05;
-    private static final int STUCK_GRACE_TICKS = 2;
-    private static final int STUCK_CONSECUTIVE_TICKS = 3;
-    private static final int MAX_TICK_PADDING = 6;
+    private static final ResourceLocation STEP_HEIGHT_MODIFIER_ID =
+            ResourceLocation.fromNamespaceAndPath(BoosterMod.MOD_ID, "boost_step_height");
+    /** 推进期间在默认 0.6 的基础上额外抬高 step height，使玩家能自动越过 1 格台阶。 */
+    private static final double STEP_HEIGHT_BOOST = 0.5;
 
     private static final Map<UUID, ActiveBoost> ACTIVE = new ConcurrentHashMap<>();
 
@@ -27,18 +37,19 @@ public final class BoosterMotionTicker {
     public static void start(
             ServerLevel level,
             ServerPlayer player,
-            Vec3 startFeet,
-            double targetDistance,
             Vec3 direction,
             BoosterBalanceProfile profile,
             Vec3 originEye,
             double eyeOffsetY) {
-        double speed = profile.speed();
-        int plannedTicks = estimatePlannedTicks(targetDistance, speed);
-        applyVelocity(player, direction, speedForTick(profile, tickProgress(0, plannedTicks)));
+        applyStepHeightBoost(player);
+
+        player.setDeltaMovement(direction.x * profile.impulse(), 0.0, direction.z * profile.impulse());
+        player.resetFallDistance();
+        player.hurtMarked = true;
+
         ACTIVE.put(
                 player.getUUID(),
-                new ActiveBoost(level, startFeet, direction, targetDistance, profile, plannedTicks, originEye, eyeOffsetY));
+                new ActiveBoost(level, direction, profile, originEye, eyeOffsetY));
     }
 
     public static void tickServer(MinecraftServer server) {
@@ -57,122 +68,77 @@ public final class BoosterMotionTicker {
         }
     }
 
-    private static void applyVelocity(ServerPlayer player, Vec3 direction, double speed) {
-        player.setDeltaMovement(direction.x * speed, 0.0, direction.z * speed);
-        player.resetFallDistance();
-        player.hurtMarked = true;
+    private static void stopBoost(ServerPlayer player) {
+        removeStepHeightBoost(player);
     }
 
-    private static void stopBoost(ServerPlayer player) {
-        Vec3 current = player.getDeltaMovement();
-        player.setDeltaMovement(0.0, current.y, 0.0);
-        player.hurtMarked = true;
+    private static void applyStepHeightBoost(ServerPlayer player) {
+        AttributeInstance attr = player.getAttribute(Attributes.STEP_HEIGHT);
+        if (attr == null || attr.getModifier(STEP_HEIGHT_MODIFIER_ID) != null) {
+            return;
+        }
+        attr.addTransientModifier(new AttributeModifier(
+                STEP_HEIGHT_MODIFIER_ID, STEP_HEIGHT_BOOST, AttributeModifier.Operation.ADD_VALUE));
+    }
+
+    private static void removeStepHeightBoost(ServerPlayer player) {
+        AttributeInstance attr = player.getAttribute(Attributes.STEP_HEIGHT);
+        if (attr != null) {
+            attr.removeModifier(STEP_HEIGHT_MODIFIER_ID);
+        }
     }
 
     private static final class ActiveBoost {
         private final ServerLevel level;
-        private final Vec3 startFeet;
         private final Vec3 direction;
-        private final double targetDistance;
         private final BoosterBalanceProfile profile;
-        private final int plannedTicks;
         private final Vec3 originEye;
         private final double eyeOffsetY;
-        private double lastProgress;
-        private int stalledTicks;
         private int tick;
 
         private ActiveBoost(
                 ServerLevel level,
-                Vec3 startFeet,
                 Vec3 direction,
-                double targetDistance,
                 BoosterBalanceProfile profile,
-                int plannedTicks,
                 Vec3 originEye,
                 double eyeOffsetY) {
             this.level = level;
-            this.startFeet = startFeet;
             this.direction = direction;
-            this.targetDistance = targetDistance;
             this.profile = profile;
-            this.plannedTicks = plannedTicks;
             this.originEye = originEye;
             this.eyeOffsetY = eyeOffsetY;
         }
 
         private boolean step(ServerPlayer player) {
+            if (player.horizontalCollision) {
+                emitEndParticles(player.position());
+                return true;
+            }
+
+            int totalTicks = profile.thrustTicks();
+            if (totalTicks <= 0 || tick >= totalTicks) {
+                emitEndParticles(player.position());
+                return true;
+            }
+
+            double progress = (double) tick / totalTicks;
+            double thrust = profile.thrustPerTick() * (1.0 - progress);
+
+            Vec3 v = player.getDeltaMovement();
+            player.setDeltaMovement(
+                    v.x + direction.x * thrust,
+                    0.0,
+                    v.z + direction.z * thrust);
+            player.resetFallDistance();
+            player.hurtMarked = true;
+
             tick++;
-            Vec3 current = player.position();
-            double progress = forwardProgress(startFeet, current, direction);
-
-            if (tick > STUCK_GRACE_TICKS) {
-                if (progress - lastProgress < STUCK_PROGRESS) {
-                    stalledTicks++;
-                    if (stalledTicks >= STUCK_CONSECUTIVE_TICKS) {
-                        emitEndParticles(current);
-                        return true;
-                    }
-                } else {
-                    stalledTicks = 0;
-                }
-            }
-            lastProgress = progress;
-
-            if (progress >= targetDistance - 0.05) {
-                emitEndParticles(current);
-                return true;
-            }
-
-            if (tick >= plannedTicks + MAX_TICK_PADDING) {
-                emitEndParticles(current);
-                return true;
-            }
-
-            applyVelocity(player, direction, speedForTick(profile, tickProgress(tick, plannedTicks)));
             return false;
         }
 
-        private void emitEndParticles(Vec3 current) {
-            Vec3 targetEye = current.add(0.0, eyeOffsetY, 0.0);
+        private void emitEndParticles(Vec3 currentFeet) {
+            Vec3 targetEye = currentFeet.add(0.0, eyeOffsetY, 0.0);
             BoosterLeggingsItem.emitTrailParticles(level, originEye, targetEye);
         }
-
-        private static double forwardProgress(Vec3 startFeet, Vec3 currentFeet, Vec3 direction) {
-            double dx = currentFeet.x - startFeet.x;
-            double dz = currentFeet.z - startFeet.z;
-            return dx * direction.x + dz * direction.z;
-        }
-    }
-
-    private static int estimatePlannedTicks(double targetDistance, double speed) {
-        return Math.max(4, (int) Math.ceil(targetDistance / Math.max(speed, 1.0e-6)));
-    }
-
-    private static double tickProgress(int tick, int plannedTicks) {
-        if (plannedTicks <= 1) {
-            return 1.0;
-        }
-        return Math.min(1.0, (double) tick / (plannedTicks - 1));
-    }
-
-    private static double speedForTick(BoosterBalanceProfile profile, double progress) {
-        return profile.speed() * jetSpeedMultiplier(progress, profile);
-    }
-
-    private static double jetSpeedMultiplier(double progress, BoosterBalanceProfile profile) {
-        double peakMultiplier = profile.boostStrength();
-        double endMultiplier = profile.endSpeedMultiplier();
-        if (progress < 0.15) {
-            return lerp(progress / 0.15, 0.90, peakMultiplier);
-        }
-        if (progress < 0.70) {
-            return lerp((progress - 0.15) / 0.55, peakMultiplier, 1.00);
-        }
-        return lerp((progress - 0.70) / 0.30, 1.00, endMultiplier);
-    }
-
-    private static double lerp(double t, double start, double end) {
-        return start + (end - start) * t;
     }
 }
