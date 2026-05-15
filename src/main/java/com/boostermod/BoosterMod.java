@@ -27,8 +27,8 @@ public class BoosterMod implements ModInitializer {
     public static final String MOD_ID = "boostermod";
     public static final Logger LOGGER = LoggerFactory.getLogger(MOD_ID);
 
-    public static final Item BOOSTER_LEGGINGS_WOOD = registerBoosterLeggings(BoosterTier.WOOD);
-    public static final Item BOOSTER_LEGGINGS_STONE = registerBoosterLeggings(BoosterTier.STONE);
+//     public static final Item BOOSTER_LEGGINGS_WOOD = registerBoosterLeggings(BoosterTier.WOOD);
+//     public static final Item BOOSTER_LEGGINGS_STONE = registerBoosterLeggings(BoosterTier.STONE);
     public static final Item BOOSTER_LEGGINGS_COPPER = registerBoosterLeggings(BoosterTier.COPPER);
     public static final Item BOOSTER_LEGGINGS_IRON = registerBoosterLeggings(BoosterTier.IRON);
     public static final Item BOOSTER_LEGGINGS_GOLD = registerBoosterLeggings(BoosterTier.GOLD);
@@ -47,8 +47,8 @@ public class BoosterMod implements ModInitializer {
                         .icon(() -> new ItemStack(BOOSTER_LEGGINGS_DIAMOND))
                         .title(Component.translatable("itemGroup.boostermod.main"))
                         .displayItems((params, output) -> {
-                            output.accept(BOOSTER_LEGGINGS_WOOD);
-                            output.accept(BOOSTER_LEGGINGS_STONE);
+                        //     output.accept(BOOSTER_LEGGINGS_WOOD);
+                        //     output.accept(BOOSTER_LEGGINGS_STONE);
                             output.accept(BOOSTER_LEGGINGS_COPPER);
                             output.accept(BOOSTER_LEGGINGS_IRON);
                             output.accept(BOOSTER_LEGGINGS_GOLD);
@@ -63,7 +63,12 @@ public class BoosterMod implements ModInitializer {
 
         ServerPlayNetworking.registerGlobalReceiver(BoosterRequestPayload.TYPE, (payload, context) ->
                 context.server().execute(() ->
-                        BoosterLeggingsItem.tryBoostFromKey(context.player(), payload.dirX(), payload.dirZ()))
+                        BoosterLeggingsItem.tryBoostFromKey(
+                                context.player(),
+                                payload.dirX(),
+                                payload.dirZ(),
+                                payload.jumpTicksAgo(),
+                                payload.landingTicksAgo()))
         );
         ServerPlayNetworking.registerGlobalReceiver(BoosterSteerPayload.TYPE, (payload, context) ->
                 context.server().execute(() -> BoosterMotionTicker.setSteerInput(

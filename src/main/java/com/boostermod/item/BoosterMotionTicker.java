@@ -28,6 +28,7 @@ import net.minecraft.world.phys.Vec3;
  * </ol>
  */
 public final class BoosterMotionTicker {
+    private static final int HYPER_Y_LOCK_DELAY_TICKS = 2;
     private static final ResourceLocation STEP_HEIGHT_MODIFIER_ID =
             ResourceLocation.fromNamespaceAndPath(BoosterMod.MOD_ID, "boost_step_height");
     /** 推进期间在默认 0.6 的基础上额外抬高 step height，使玩家能自动越过 1 格台阶。 */
@@ -37,6 +38,7 @@ public final class BoosterMotionTicker {
      * "ground friction = 0.546" 的物理分支，进入"air friction = 0.91"，使飞行距离与空中推进对齐。
      */
     private static final double GROUND_JUMP_KICK = 0.42;
+    private static final double HYPER_IMPULSE_MULTIPLIER = 1.25;
     /**
      * 推进期间 A/D 键对推进方向的侧向修正强度，单位是"当前 tick 主推力的倍率"。
      * 取值 < 1 以保证只是"微调"，不会颠覆原有航向。
@@ -77,7 +79,8 @@ public final class BoosterMotionTicker {
             Vec3 direction,
             BoosterBalanceProfile profile,
             Vec3 originEye,
-            double eyeOffsetY) {
+            double eyeOffsetY,
+            boolean hyper) {
         applyStepHeightBoost(player);
 
         double startY;
@@ -88,13 +91,14 @@ public final class BoosterMotionTicker {
             // 空中触发时保留上扬动量、抹掉下落，避免推进过程被重力越拉越深。
             startY = Math.max(0.0, player.getDeltaMovement().y);
         }
-        player.setDeltaMovement(direction.x * profile.impulse(), startY, direction.z * profile.impulse());
+        double impulse = profile.impulse() * (hyper ? HYPER_IMPULSE_MULTIPLIER : 1.0);
+        player.setDeltaMovement(direction.x * impulse, startY, direction.z * impulse);
         player.resetFallDistance();
         player.hurtMarked = true;
 
         ACTIVE.put(
                 player.getUUID(),
-                new ActiveBoost(level, direction, profile, originEye, eyeOffsetY));
+                new ActiveBoost(level, direction, profile, originEye, eyeOffsetY, hyper));
     }
 
     public static void tickServer(MinecraftServer server) {
@@ -142,6 +146,7 @@ public final class BoosterMotionTicker {
         private final BoosterBalanceProfile profile;
         private final Vec3 originEye;
         private final double eyeOffsetY;
+        private final int yLockDelayTicks;
         private int tick;
 
         private ActiveBoost(
@@ -149,12 +154,14 @@ public final class BoosterMotionTicker {
                 Vec3 direction,
                 BoosterBalanceProfile profile,
                 Vec3 originEye,
-                double eyeOffsetY) {
+                double eyeOffsetY,
+                boolean hyper) {
             this.level = level;
             this.direction = direction;
             this.profile = profile;
             this.originEye = originEye;
             this.eyeOffsetY = eyeOffsetY;
+            this.yLockDelayTicks = hyper ? HYPER_Y_LOCK_DELAY_TICKS : 0;
         }
 
         private boolean step(ServerPlayer player) {
@@ -195,7 +202,7 @@ public final class BoosterMotionTicker {
             Vec3 v = player.getDeltaMovement();
             player.setDeltaMovement(
                     v.x + direction.x * (thrust + forwardSteer) + sideX * sideThrust,
-                    0.0,
+                    tick < yLockDelayTicks ? Math.max(0.0, v.y) : 0.0,
                     v.z + direction.z * (thrust + forwardSteer) + sideZ * sideThrust);
             if (player.onGround()) {
                 player.setOnGround(false);

@@ -23,8 +23,13 @@ import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.Vec3;
 
 public class BoosterLeggingsItem extends Item implements Equipable {
+    private static final int HYPER_WINDOW_TICKS = 3;
     private static final int COOLDOWN_TICKS = 60;
     private static final float MOVEMENT_BOOST_HUNGER_EXHAUSTION = 1.0f;
+    private static final float BOOST_SOUND_VOLUME = 1.0f;
+    private static final float BOOST_SOUND_PITCH = 1.2f;
+    private static final float HYPER_CONFIRM_VOLUME = 0.45f;
+    private static final float HYPER_CONFIRM_PITCH = 1.75f;
     /** 起跳前的最小前向探测距离：若该格内无法容纳玩家，则视为贴墙，不消耗冷却。 */
     private static final double FORWARD_PROBE_DISTANCE = 0.1;
     /** 探测前向时允许上抬的最大高度（与 {@link BoosterMotionTicker} 的 step height 提升保持一致）。 */
@@ -55,7 +60,12 @@ public class BoosterLeggingsItem extends Item implements Equipable {
         return this.swapWithEquipmentSlot(this, level, player, hand);
     }
 
-    public static void tryBoostFromKey(ServerPlayer player, double clientDirX, double clientDirZ) {
+    public static void tryBoostFromKey(
+            ServerPlayer player,
+            double clientDirX,
+            double clientDirZ,
+            int jumpTicksAgo,
+            int landingTicksAgo) {
         ItemStack legs = player.getItemBySlot(EquipmentSlot.LEGS);
         if (!(legs.getItem() instanceof BoosterLeggingsItem boosterItem)) {
             return;
@@ -77,9 +87,14 @@ public class BoosterLeggingsItem extends Item implements Equipable {
             return;
         }
 
-        boosterItem.applyBoost(level, player, legs, direction);
+        boosterItem.applyBoost(level, player, legs, direction, isHyperBoost(player, jumpTicksAgo, landingTicksAgo));
         player.getCooldowns().addCooldown(boosterItem, COOLDOWN_TICKS);
         player.swing(InteractionHand.MAIN_HAND, true);
+    }
+
+    private static boolean isHyperBoost(ServerPlayer player, int jumpTicksAgo, int landingTicksAgo) {
+        boolean landingWindow = player.onGround() && landingTicksAgo >= 0 && landingTicksAgo <= HYPER_WINDOW_TICKS;
+        return landingWindow;
     }
 
     public static void tickActiveMotions(MinecraftServer server) {
@@ -144,7 +159,12 @@ public class BoosterLeggingsItem extends Item implements Equipable {
         return new Vec3(-Math.sin(yawRad), 0.0, Math.cos(yawRad)).normalize();
     }
 
-    private void applyBoost(ServerLevel level, ServerPlayer player, ItemStack legsStack, Vec3 direction) {
+    private void applyBoost(
+            ServerLevel level,
+            ServerPlayer player,
+            ItemStack legsStack,
+            Vec3 direction,
+            boolean hyper) {
         BoosterBalanceProfile balance = currentBalance(level);
         Vec3 originEye = player.getEyePosition();
         double eyeOffsetY = player.getEyeY() - player.getY();
@@ -155,9 +175,16 @@ public class BoosterLeggingsItem extends Item implements Equipable {
         }
 
         level.playSound(null, originEye.x, originEye.y, originEye.z,
-                SoundEvents.BREEZE_SHOOT, SoundSource.PLAYERS, 1.0f, 1.2f);
+                SoundEvents.BREEZE_SHOOT, SoundSource.PLAYERS, BOOST_SOUND_VOLUME, BOOST_SOUND_PITCH);
+        if (hyper) {
+            level.playSound(null, originEye.x, originEye.y, originEye.z,
+                    SoundEvents.EXPERIENCE_ORB_PICKUP,
+                    SoundSource.PLAYERS,
+                    HYPER_CONFIRM_VOLUME,
+                    HYPER_CONFIRM_PITCH);
+        }
 
-        BoosterMotionTicker.start(level, player, direction, balance, originEye, eyeOffsetY);
+        BoosterMotionTicker.start(level, player, direction, balance, originEye, eyeOffsetY, hyper);
     }
 
     static void emitTrailParticles(ServerLevel level, Vec3 from, Vec3 to) {

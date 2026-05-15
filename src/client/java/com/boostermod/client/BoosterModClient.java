@@ -12,12 +12,16 @@ import net.minecraft.client.player.LocalPlayer;
 import org.lwjgl.glfw.GLFW;
 
 public class BoosterModClient implements ClientModInitializer {
+    private static final int HYPER_WINDOW_TICKS = 3;
     public static KeyMapping boostKey;
 
     /** 上一次发送给服务端的 strafe 输入，用于去重，避免 0 状态下持续刷包。 */
     private static float lastSentStrafe;
     /** 上一次发送给服务端的 forward 输入，用于去重。 */
     private static float lastSentForward;
+    private static int ticksSinceLandingAfterJump = Integer.MAX_VALUE;
+    private static boolean sawJumpArc;
+    private static boolean wasOnGround;
 
     @Override
     public void onInitializeClient() {
@@ -31,15 +35,48 @@ public class BoosterModClient implements ClientModInitializer {
         ClientTickEvents.END_CLIENT_TICK.register(client -> {
             LocalPlayer player = client.player;
             if (player == null) {
+                resetHyperTracking();
                 return;
             }
+            trackHyperWindows(client, player);
             while (boostKey.consumeClick()) {
                 ClientPlayNetworking.send(new BoosterRequestPayload(
                         intendedBoostDirX(player),
-                        intendedBoostDirZ(player)));
+                        intendedBoostDirZ(player),
+                        -1,
+                        landingTicksAgoForPayload()));
             }
             syncSteerInput(player);
         });
+    }
+
+    private static void trackHyperWindows(net.minecraft.client.Minecraft client, LocalPlayer player) {
+        boolean onGround = player.onGround();
+        if (!onGround && player.getDeltaMovement().y > 0.0) {
+            sawJumpArc = true;
+        }
+        if (sawJumpArc && onGround && !wasOnGround) {
+            ticksSinceLandingAfterJump = 0;
+            sawJumpArc = false;
+        }
+        if (sawJumpArc && onGround) {
+            sawJumpArc = false;
+        }
+        if (ticksSinceLandingAfterJump != Integer.MAX_VALUE) {
+            ticksSinceLandingAfterJump++;
+        }
+
+        wasOnGround = onGround;
+    }
+
+    private static int landingTicksAgoForPayload() {
+        return ticksSinceLandingAfterJump <= HYPER_WINDOW_TICKS ? ticksSinceLandingAfterJump : -1;
+    }
+
+    private static void resetHyperTracking() {
+        ticksSinceLandingAfterJump = Integer.MAX_VALUE;
+        sawJumpArc = false;
+        wasOnGround = false;
     }
 
     /**
