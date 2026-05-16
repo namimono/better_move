@@ -11,6 +11,7 @@ import net.fabricmc.fabric.api.command.v2.CommandRegistrationCallback;
 import net.fabricmc.fabric.api.event.lifecycle.v1.ServerTickEvents;
 import net.fabricmc.fabric.api.itemgroup.v1.FabricItemGroup;
 import net.fabricmc.fabric.api.networking.v1.PayloadTypeRegistry;
+import net.fabricmc.fabric.api.networking.v1.ServerPlayConnectionEvents;
 import net.fabricmc.fabric.api.networking.v1.ServerPlayNetworking;
 import net.minecraft.core.Registry;
 import net.minecraft.core.registries.BuiltInRegistries;
@@ -74,6 +75,8 @@ public class BoosterMod implements ModInitializer {
                 context.server().execute(() -> BoosterMotionTicker.setSteerInput(
                         context.player().getUUID(), payload.strafe(), payload.forward()))
         );
+        ServerPlayConnectionEvents.DISCONNECT.register((handler, server) ->
+                server.execute(() -> BoosterMotionTicker.cancel(handler.player)));
 
         CommandRegistrationCallback.EVENT.register((dispatcher, registryAccess, environment) ->
                 BoosterModCommand.register(dispatcher));

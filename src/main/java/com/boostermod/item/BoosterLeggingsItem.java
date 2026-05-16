@@ -82,12 +82,14 @@ public class BoosterLeggingsItem extends Item implements Equipable {
         }
 
         ServerLevel level = player.serverLevel();
-        Vec3 direction = boosterItem.resolveBoostDirection(level, player, clientDirX, clientDirZ);
+        boolean airborneViewBoost = !player.onGround();
+        Vec3 direction = boosterItem.resolveBoostDirection(level, player, clientDirX, clientDirZ, airborneViewBoost);
         if (direction == null) {
             return;
         }
 
-        boosterItem.applyBoost(level, player, legs, direction, isHyperBoost(player, jumpTicksAgo, landingTicksAgo));
+        boosterItem.applyBoost(
+                level, player, legs, direction, isHyperBoost(player, jumpTicksAgo, landingTicksAgo), airborneViewBoost);
         player.getCooldowns().addCooldown(boosterItem, COOLDOWN_TICKS);
         player.swing(InteractionHand.MAIN_HAND, true);
     }
@@ -105,7 +107,13 @@ public class BoosterLeggingsItem extends Item implements Equipable {
      * 计算推进方向并做一次性前向碰撞探测：方向非零且前方至少能容纳 {@link #FORWARD_PROBE_DISTANCE} 才放行。
      * 实际飞行距离不再预先扫描，完全由 {@link BoosterMotionTicker} 的物理推力与 MC 引擎决定。
      */
-    private Vec3 resolveBoostDirection(Level level, Player player, double clientDirX, double clientDirZ) {
+    private Vec3 resolveBoostDirection(
+            Level level, Player player, double clientDirX, double clientDirZ, boolean airborneViewBoost) {
+        if (airborneViewBoost) {
+            Vec3 look = player.getViewVector(1.0f);
+            return look.lengthSqr() < 1.0e-6 ? null : look.normalize();
+        }
+
         Vec3 direction = horizontalBoostDirection(player, clientDirX, clientDirZ);
         if (direction.lengthSqr() < 1.0e-6) {
             return null;
@@ -164,7 +172,8 @@ public class BoosterLeggingsItem extends Item implements Equipable {
             ServerPlayer player,
             ItemStack legsStack,
             Vec3 direction,
-            boolean hyper) {
+            boolean hyper,
+            boolean airborneViewBoost) {
         BoosterBalanceProfile balance = currentBalance(level);
         Vec3 originEye = player.getEyePosition();
         double eyeOffsetY = player.getEyeY() - player.getY();
@@ -184,7 +193,7 @@ public class BoosterLeggingsItem extends Item implements Equipable {
                     HYPER_CONFIRM_PITCH);
         }
 
-        BoosterMotionTicker.start(level, player, direction, balance, originEye, eyeOffsetY, hyper);
+        BoosterMotionTicker.start(level, player, direction, balance, originEye, eyeOffsetY, hyper, airborneViewBoost);
     }
 
     static void emitTrailParticles(ServerLevel level, Vec3 from, Vec3 to) {

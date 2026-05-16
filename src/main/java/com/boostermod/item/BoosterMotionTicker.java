@@ -23,11 +23,12 @@ import net.minecraft.world.phys.Vec3;
  *       0.546 的"地面摩擦"分支。注意不能只靠 {@code player.onGround()} 判断：奔跑过程中
  *       越过 1px 小坎、客户端上报 onGround 的时序抖动，都会让服务端短暂看到 onGround=false
  *       而 Y 速度又接近 0 —— 一旦漏补垂直冲量，玩家下一 tick 就落回地面被地面摩擦吞掉。</li>
- *   <li>{@link ActiveBoost#step} 每 tick 沿水平方向追加线性衰减的推力，并将 Y 速度锁回 0，
- *       让玩家在起跳达到的高度上悬停推进；这样无论是地面触发还是空中触发，推进期间都不会
- *       落地，水平方向恒定走空气阻力，飞行距离不受触发时机影响。期间玩家的移动键（WASD）
- *       会按当前 tick 主推力的固定百分比叠加到水平速度上，作为对推进方向的轻微修正。</li>
- *   <li>推力结束 / 撞墙 / 玩家离线即收尾，停止 Y 锁后由 MC 重力自然接管落地。</li>
+ *   <li>{@link ActiveBoost#step} 每 tick 追加线性衰减的推力：
+ *       地面触发沿水平方向推进并将 Y 速度锁回 0，让玩家悬停在起跳高度；
+ *       空中触发则改为沿当前视线的 3D 方向推进，并在推进期间临时关闭重力，
+ *       使玩家真正实现"看哪飞哪"而不会被持续下坠打断。</li>
+ *   <li>推力结束 / 撞墙 / 玩家离线即收尾，恢复 step height；若本次推进临时接管了重力，
+ *       则一并恢复为原版重力。</li>
  * </ol>
  */
 public final class BoosterMotionTicker {
@@ -52,7 +53,6 @@ public final class BoosterMotionTicker {
      * 比侧向更弱，因为主推力本身就是向前的，再叠加同向加速容易破坏速度曲线。
      */
     private static final double STEER_FORWARD_FACTOR = 0.20;
-
     private static final Map<UUID, ActiveBoost> ACTIVE = new ConcurrentHashMap<>();
     /**
      * 玩家上报的"移动键修正输入"缓存。key = 玩家 UUID，value = {strafe, forward}。
@@ -83,31 +83,54 @@ public final class BoosterMotionTicker {
             BoosterBalanceProfile profile,
             Vec3 originEye,
             double eyeOffsetY,
-            boolean hyper) {
+            boolean hyper,
+            boolean airborneViewBoost) {
         applyStepHeightBoost(player);
 
         Vec3 existingVelocity = player.getDeltaMovement();
-        // 兜底保证脱离地面摩擦：不论 player.onGround() 当前是 true 还是 false，只要玩家不是
-        // 正在以 ≥ GROUND_JUMP_KICK 的速率上升，就补一个跳跃式垂直冲量并强制离地。
-        // 这样可以一并覆盖以下"看起来在空中、实则下一 tick 立刻落地"的边缘情形：
-        //   1) 奔跑越过 1px 小坎 / 半砖 / 台阶时，服务端的 onGround 短暂为 false；
-        //   2) 客户端最近一次 onGround=false 的移动包到达时序晚于触发包；
-        //   3) 跳跃顶点或下落途中按 Z，Y 速度 ≈ 0 或负值。
-        // 漏补垂直冲量的代价是：下一 tick 玩家落回地面，整段推进剩余部分走 0.546 的地面摩擦
-        // 分支，水平速度每 tick 衰减 ~45%，推进距离骤减 —— 这正是奔跑触发感觉"没推多少"的成因。
-        double startY = Math.max(GROUND_JUMP_KICK, existingVelocity.y);
+        boolean grantedNoGravity = airborneViewBoost && !player.isNoGravity();
+        if (grantedNoGravity) {
+            player.setNoGravity(true);
+        }
         player.setOnGround(false);
 
         double impulse = profile.impulse() * (hyper ? HYPER_IMPULSE_MULTIPLIER : 1.0);
-        double startX = hyper ? existingVelocity.x + direction.x * impulse : direction.x * impulse;
-        double startZ = hyper ? existingVelocity.z + direction.z * impulse : direction.z * impulse;
+        double startX;
+        double startY;
+        double startZ;
+        if (airborneViewBoost) {
+            // 空中触发时允许完整 3D 视线推进：不再补地面起跳冲量，避免抹掉视线里的俯仰分量。
+            startX = hyper ? existingVelocity.x + direction.x * impulse : direction.x * impulse;
+            startY = hyper ? existingVelocity.y + direction.y * impulse : direction.y * impulse;
+            startZ = hyper ? existingVelocity.z + direction.z * impulse : direction.z * impulse;
+        } else {
+            // 兜底保证脱离地面摩擦：不论 player.onGround() 当前是 true 还是 false，只要玩家不是
+            // 正在以 ≥ GROUND_JUMP_KICK 的速率上升，就补一个跳跃式垂直冲量并强制离地。
+            // 这样可以一并覆盖以下"看起来在空中、实则下一 tick 立刻落地"的边缘情形：
+            //   1) 奔跑越过 1px 小坎 / 半砖 / 台阶时，服务端的 onGround 短暂为 false；
+            //   2) 客户端最近一次 onGround=false 的移动包到达时序晚于触发包；
+            //   3) 跳跃顶点或下落途中按 Z，Y 速度 ≈ 0 或负值。
+            // 漏补垂直冲量的代价是：下一 tick 玩家落回地面，整段推进剩余部分走 0.546 的地面摩擦
+            // 分支，水平速度每 tick 衰减 ~45%，推进距离骤减 —— 这正是奔跑触发感觉"没推多少"的成因。
+            startY = Math.max(GROUND_JUMP_KICK, existingVelocity.y);
+            startX = hyper ? existingVelocity.x + direction.x * impulse : direction.x * impulse;
+            startZ = hyper ? existingVelocity.z + direction.z * impulse : direction.z * impulse;
+        }
         player.setDeltaMovement(startX, startY, startZ);
         player.resetFallDistance();
         player.hurtMarked = true;
 
         ACTIVE.put(
                 player.getUUID(),
-                new ActiveBoost(level, direction, profile, originEye, eyeOffsetY, hyper));
+                new ActiveBoost(
+                        level,
+                        direction,
+                        profile,
+                        originEye,
+                        eyeOffsetY,
+                        hyper,
+                        airborneViewBoost,
+                        grantedNoGravity));
     }
 
     public static void tickServer(MinecraftServer server) {
@@ -121,16 +144,28 @@ public final class BoosterMotionTicker {
                 STEER_INPUT.remove(id);
                 continue;
             }
-            if (entry.getValue().step(player)) {
-                stopBoost(player);
+            ActiveBoost boost = entry.getValue();
+            if (boost.step(player)) {
+                stopBoost(player, boost);
                 it.remove();
                 STEER_INPUT.remove(id);
             }
         }
     }
 
-    private static void stopBoost(ServerPlayer player) {
+    public static void cancel(ServerPlayer player) {
+        ActiveBoost boost = ACTIVE.remove(player.getUUID());
+        if (boost != null) {
+            stopBoost(player, boost);
+        }
+        STEER_INPUT.remove(player.getUUID());
+    }
+
+    private static void stopBoost(ServerPlayer player, ActiveBoost boost) {
         removeStepHeightBoost(player);
+        if (boost.grantedNoGravity) {
+            player.setNoGravity(false);
+        }
     }
 
     private static void applyStepHeightBoost(ServerPlayer player) {
@@ -156,6 +191,8 @@ public final class BoosterMotionTicker {
         private final Vec3 originEye;
         private final double eyeOffsetY;
         private final int yLockDelayTicks;
+        private final boolean airborneViewBoost;
+        private final boolean grantedNoGravity;
         private int tick;
 
         private ActiveBoost(
@@ -164,13 +201,17 @@ public final class BoosterMotionTicker {
                 BoosterBalanceProfile profile,
                 Vec3 originEye,
                 double eyeOffsetY,
-                boolean hyper) {
+                boolean hyper,
+                boolean airborneViewBoost,
+                boolean grantedNoGravity) {
             this.level = level;
             this.direction = direction;
             this.profile = profile;
             this.originEye = originEye;
             this.eyeOffsetY = eyeOffsetY;
             this.yLockDelayTicks = hyper ? HYPER_Y_LOCK_DELAY_TICKS : 0;
+            this.airborneViewBoost = airborneViewBoost;
+            this.grantedNoGravity = grantedNoGravity;
         }
 
         private boolean step(ServerPlayer player) {
@@ -187,6 +228,24 @@ public final class BoosterMotionTicker {
 
             double progress = (double) tick / totalTicks;
             double thrust = profile.thrustPerTick() * (1.0 - progress);
+
+            if (airborneViewBoost) {
+                Vec3 look = player.getViewVector(1.0f);
+                Vec3 thrustDirection = look.lengthSqr() < 1.0e-6 ? direction : look.normalize();
+                Vec3 v = player.getDeltaMovement();
+                player.setDeltaMovement(
+                        v.x + thrustDirection.x * thrust,
+                        v.y + thrustDirection.y * thrust,
+                        v.z + thrustDirection.z * thrust);
+                if (player.onGround()) {
+                    player.setOnGround(false);
+                }
+                player.resetFallDistance();
+                player.hurtMarked = true;
+
+                tick++;
+                return false;
+            }
 
             // 读取由客户端通过 BoosterSteerPayload 同步过来的移动键输入：
             //   strafe 为左右（A=+1，D=-1），forward 为前后（W=+1，S=-1）。
