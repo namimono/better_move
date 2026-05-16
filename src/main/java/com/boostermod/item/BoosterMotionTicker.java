@@ -18,8 +18,11 @@ import net.minecraft.world.phys.Vec3;
 /**
  * 推进器运动管理：
  * <ol>
- *   <li>{@link #start} 时给一个水平初速度；如果玩家在地面则同时给一个跳跃式垂直冲量并强制
- *       离地，使本 tick 就走 0.91 的"空中阻力"分支而非 0.546 的"地面摩擦"分支。</li>
+ *   <li>{@link #start} 时给一个水平初速度；只要玩家当前的 Y 速度低于 {@link #GROUND_JUMP_KICK}，
+ *       就同时补一个跳跃式垂直冲量并强制离地，使本 tick 起就走 0.91 的"空中阻力"分支而非
+ *       0.546 的"地面摩擦"分支。注意不能只靠 {@code player.onGround()} 判断：奔跑过程中
+ *       越过 1px 小坎、客户端上报 onGround 的时序抖动，都会让服务端短暂看到 onGround=false
+ *       而 Y 速度又接近 0 —— 一旦漏补垂直冲量，玩家下一 tick 就落回地面被地面摩擦吞掉。</li>
  *   <li>{@link ActiveBoost#step} 每 tick 沿水平方向追加线性衰减的推力，并将 Y 速度锁回 0，
  *       让玩家在起跳达到的高度上悬停推进；这样无论是地面触发还是空中触发，推进期间都不会
  *       落地，水平方向恒定走空气阻力，飞行距离不受触发时机影响。期间玩家的移动键（WASD）
@@ -83,16 +86,22 @@ public final class BoosterMotionTicker {
             boolean hyper) {
         applyStepHeightBoost(player);
 
-        double startY;
-        if (player.onGround()) {
-            startY = GROUND_JUMP_KICK;
-            player.setOnGround(false);
-        } else {
-            // 空中触发时保留上扬动量、抹掉下落，避免推进过程被重力越拉越深。
-            startY = Math.max(0.0, player.getDeltaMovement().y);
-        }
+        Vec3 existingVelocity = player.getDeltaMovement();
+        // 兜底保证脱离地面摩擦：不论 player.onGround() 当前是 true 还是 false，只要玩家不是
+        // 正在以 ≥ GROUND_JUMP_KICK 的速率上升，就补一个跳跃式垂直冲量并强制离地。
+        // 这样可以一并覆盖以下"看起来在空中、实则下一 tick 立刻落地"的边缘情形：
+        //   1) 奔跑越过 1px 小坎 / 半砖 / 台阶时，服务端的 onGround 短暂为 false；
+        //   2) 客户端最近一次 onGround=false 的移动包到达时序晚于触发包；
+        //   3) 跳跃顶点或下落途中按 Z，Y 速度 ≈ 0 或负值。
+        // 漏补垂直冲量的代价是：下一 tick 玩家落回地面，整段推进剩余部分走 0.546 的地面摩擦
+        // 分支，水平速度每 tick 衰减 ~45%，推进距离骤减 —— 这正是奔跑触发感觉"没推多少"的成因。
+        double startY = Math.max(GROUND_JUMP_KICK, existingVelocity.y);
+        player.setOnGround(false);
+
         double impulse = profile.impulse() * (hyper ? HYPER_IMPULSE_MULTIPLIER : 1.0);
-        player.setDeltaMovement(direction.x * impulse, startY, direction.z * impulse);
+        double startX = hyper ? existingVelocity.x + direction.x * impulse : direction.x * impulse;
+        double startZ = hyper ? existingVelocity.z + direction.z * impulse : direction.z * impulse;
+        player.setDeltaMovement(startX, startY, startZ);
         player.resetFallDistance();
         player.hurtMarked = true;
 
