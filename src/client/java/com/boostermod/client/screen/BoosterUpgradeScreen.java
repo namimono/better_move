@@ -8,12 +8,14 @@ import net.minecraft.network.chat.Component;
 import net.minecraft.world.entity.player.Inventory;
 
 public class BoosterUpgradeScreen extends AbstractContainerScreen<BoosterUpgradeMenu> {
-    private static final int BG_COLOR = 0xFF20242C;
-    private static final int PANEL_COLOR = 0xFF2D3440;
-    private static final int SLOT_COLOR = 0xFF11141A;
-    private static final int LOCKED_SLOT_COLOR = 0xFF3A2B2F;
-    private static final int BORDER_COLOR = 0xFF6E7888;
-    private static final int LOCKED_BORDER_COLOR = 0xFF8A4F57;
+    private static final int VANILLA_BACKGROUND = 0xFFC6C6C6;
+    private static final int VANILLA_HIGHLIGHT = 0xFFFFFFFF;
+    private static final int VANILLA_LOWLIGHT = 0xFF555555;
+    private static final int VANILLA_SHADOW = 0xFF8B8B8B;
+    private static final int VANILLA_SLOT = 0xFF373737;
+    private static final int LOCKED_SLOT_OVERLAY = 0x7F000000;
+    private static final int LOCKED_MARK_COLOR = 0xFF6F6F6F;
+    private static final int TEXT_COLOR = 0xFF404040;
 
     public BoosterUpgradeScreen(BoosterUpgradeMenu menu, Inventory inventory, Component title) {
         super(menu, inventory, title);
@@ -26,28 +28,25 @@ public class BoosterUpgradeScreen extends AbstractContainerScreen<BoosterUpgrade
     protected void renderBg(GuiGraphics graphics, float partialTick, int mouseX, int mouseY) {
         int x = leftPos;
         int y = topPos;
-        graphics.fill(x, y, x + imageWidth, y + imageHeight, BG_COLOR);
-        graphics.fill(x + 6, y + 18, x + imageWidth - 6, y + 62, PANEL_COLOR);
-        graphics.renderOutline(x, y, imageWidth, imageHeight, BORDER_COLOR);
+        drawVanillaPanel(graphics, x, y, imageWidth, imageHeight);
+        drawVanillaInset(graphics, x + 26, y + 25, 124, 36);
 
         for (int i = 0; i < BoosterUpgradeHelper.MAX_SLOTS; i++) {
             boolean active = i < menu.getActiveSlots();
             int slotX = x + 35 + i * 18;
             int slotY = y + 35;
-            graphics.fill(slotX - 1, slotY - 1, slotX + 17, slotY + 17,
-                    active ? BORDER_COLOR : LOCKED_BORDER_COLOR);
-            graphics.fill(slotX, slotY, slotX + 16, slotY + 16,
-                    active ? SLOT_COLOR : LOCKED_SLOT_COLOR);
+            drawVanillaSlot(graphics, slotX - 1, slotY - 1);
             if (!active) {
-                graphics.drawCenteredString(font, "x", slotX + 8, slotY + 4, 0xFFC9A0A0);
+                graphics.fill(slotX, slotY, slotX + 16, slotY + 16, LOCKED_SLOT_OVERLAY);
+                graphics.drawCenteredString(font, "x", slotX + 8, slotY + 4, LOCKED_MARK_COLOR);
             }
         }
     }
 
     @Override
     protected void renderLabels(GuiGraphics graphics, int mouseX, int mouseY) {
-        graphics.drawString(font, title, titleLabelX, titleLabelY, 0xFFE7EDF5, false);
-        graphics.drawString(font, playerInventoryTitle, inventoryLabelX, inventoryLabelY, 0xFFE7EDF5, false);
+        graphics.drawString(font, title, titleLabelX, titleLabelY, TEXT_COLOR, false);
+        graphics.drawString(font, playerInventoryTitle, inventoryLabelX, inventoryLabelY, TEXT_COLOR, false);
     }
 
     @Override
@@ -55,5 +54,30 @@ public class BoosterUpgradeScreen extends AbstractContainerScreen<BoosterUpgrade
         renderBackground(graphics, mouseX, mouseY, delta);
         super.render(graphics, mouseX, mouseY, delta);
         renderTooltip(graphics, mouseX, mouseY);
+    }
+
+    private static void drawVanillaPanel(GuiGraphics graphics, int x, int y, int width, int height) {
+        graphics.fill(x, y, x + width, y + height, VANILLA_BACKGROUND);
+        graphics.fill(x, y, x + width, y + 1, VANILLA_HIGHLIGHT);
+        graphics.fill(x, y, x + 1, y + height, VANILLA_HIGHLIGHT);
+        graphics.fill(x + width - 1, y + 1, x + width, y + height, VANILLA_LOWLIGHT);
+        graphics.fill(x + 1, y + height - 1, x + width, y + height, VANILLA_LOWLIGHT);
+    }
+
+    private static void drawVanillaInset(GuiGraphics graphics, int x, int y, int width, int height) {
+        graphics.fill(x, y, x + width, y + height, VANILLA_SHADOW);
+        graphics.fill(x, y, x + width, y + 1, VANILLA_LOWLIGHT);
+        graphics.fill(x, y, x + 1, y + height, VANILLA_LOWLIGHT);
+        graphics.fill(x + width - 1, y + 1, x + width, y + height, VANILLA_HIGHLIGHT);
+        graphics.fill(x + 1, y + height - 1, x + width, y + height, VANILLA_HIGHLIGHT);
+    }
+
+    private static void drawVanillaSlot(GuiGraphics graphics, int x, int y) {
+        graphics.fill(x, y, x + 18, y + 18, VANILLA_BACKGROUND);
+        graphics.fill(x, y, x + 18, y + 1, VANILLA_LOWLIGHT);
+        graphics.fill(x, y, x + 1, y + 18, VANILLA_LOWLIGHT);
+        graphics.fill(x + 17, y + 1, x + 18, y + 18, VANILLA_HIGHLIGHT);
+        graphics.fill(x + 1, y + 17, x + 18, y + 18, VANILLA_HIGHLIGHT);
+        graphics.fill(x + 1, y + 1, x + 17, y + 17, VANILLA_SLOT);
     }
 }
