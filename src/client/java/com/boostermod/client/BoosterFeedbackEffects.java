@@ -8,9 +8,9 @@ import net.minecraft.sounds.SoundEvents;
 public final class BoosterFeedbackEffects {
     private static final int NORMAL_DURATION_TICKS = 8;
     private static final int HYPER_DURATION_TICKS = 11;
-    private static final float NORMAL_FOV_MODIFIER_BONUS = 0.15f;
-    private static final float HYPER_FOV_MODIFIER_BONUS = 0.30f;
-    private static final float FOV_MODIFIER_DECAY = 0.90f;
+    private static final float NORMAL_FOV_MODIFIER_BONUS = 0.18f;
+    private static final float HYPER_FOV_MODIFIER_BONUS = 0.35f;
+    private static final float FOV_MODIFIER_DECAY = 0.80f;
     private static final float FOV_MODIFIER_MIN_VISIBLE = 0.002f;
 
     private static int ticksLeft;
