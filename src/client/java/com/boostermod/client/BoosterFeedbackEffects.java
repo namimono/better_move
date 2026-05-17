@@ -65,9 +65,9 @@ public final class BoosterFeedbackEffects {
         }
 
         float phase = (durationTicks - ticksLeft + tickDelta) * (hyper ? 2.2f : 1.8f);
-        float yaw = (float) Math.sin(phase * 1.7f) * pulse * (hyper ? 0.22f : 0.08f);
-        float roll = (float) Math.sin(phase) * pulse * (hyper ? 0.32f : 0.12f);
-        float bob = (float) Math.cos(phase * 1.3f) * pulse * (hyper ? 0.006f : 0.002f);
+        float yaw = (float) Math.sin(phase * 1.7f) * pulse * (hyper ? 0.34f : 0.10f);
+        float roll = (float) Math.sin(phase) * pulse * (hyper ? 0.52f : 0.16f);
+        float bob = (float) Math.cos(phase * 1.3f) * pulse * (hyper ? 0.009f : 0.003f);
 
         poseStack.mulPose(Axis.YP.rotationDegrees(yaw));
         poseStack.mulPose(Axis.ZP.rotationDegrees(roll));

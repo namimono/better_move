@@ -95,7 +95,7 @@ public final class BoosterMotionTicker {
 
     private static void stopBoost(ServerPlayer player, ActiveBoost boost) {
         removeStepHeightBoost(player);
-        if (boost.grantedNoGravity) {
+        if (boost.grantedNoGravity || boost.grantedApexNoGravity) {
             player.setNoGravity(false);
         }
     }
@@ -124,6 +124,7 @@ public final class BoosterMotionTicker {
         private final double eyeOffsetY;
         private final boolean groundLaunch;
         private final boolean grantedNoGravity;
+        private boolean grantedApexNoGravity;
         private int tick;
 
         private ActiveBoost(
@@ -159,7 +160,7 @@ public final class BoosterMotionTicker {
             double thrust = profile.thrustPerTick() * (1.0 - progress);
             Vec3 look = player.getViewVector(1.0f);
             Vec3 thrustDirection = look.lengthSqr() < 1.0e-6 ? fallbackDirection : look.normalize();
-            Vec3 velocity = player.getDeltaMovement();
+            Vec3 velocity = maybeSuppressGravityAtApex(player, player.getDeltaMovement());
             player.setDeltaMovement(
                     velocity.x + thrustDirection.x * thrust,
                     velocity.y + thrustDirection.y * thrust,
@@ -173,6 +174,16 @@ public final class BoosterMotionTicker {
 
             tick++;
             return false;
+        }
+
+        private Vec3 maybeSuppressGravityAtApex(ServerPlayer player, Vec3 velocity) {
+            if (!groundLaunch || grantedApexNoGravity || tick == 0 || velocity.y > 0.0 || player.isNoGravity()) {
+                return velocity;
+            }
+
+            grantedApexNoGravity = true;
+            player.setNoGravity(true);
+            return new Vec3(velocity.x, 0.0, velocity.z);
         }
 
         private void emitEndParticles(Vec3 currentFeet) {
