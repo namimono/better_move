@@ -23,6 +23,10 @@ public class BoosterModClient implements ClientModInitializer {
     private static final int HYPER_WINDOW_TICKS = 3;
     private static final float READY_SOUND_VOLUME = 0.2f;
     private static final float READY_SOUND_PITCH = 1.8f;
+    private static final float HYPER_IGNITION_SOUND_VOLUME = 1.05f;
+    private static final float HYPER_IGNITION_SOUND_PITCH = 1.65f;
+    private static final float HYPER_SURGE_SOUND_VOLUME = 0.65f;
+    private static final float HYPER_SURGE_SOUND_PITCH = 1.35f;
 
     public static KeyMapping boostKey;
 
@@ -56,11 +60,15 @@ public class BoosterModClient implements ClientModInitializer {
             tickReadySound(player);
 
             while (boostKey.consumeClick()) {
+                int landingTicksAgo = landingTicksAgoForPayload();
                 ClientPlayNetworking.send(new BoosterRequestPayload(
                         intendedBoostDirX(player),
                         intendedBoostDirZ(player),
                         -1,
-                        landingTicksAgoForPayload()));
+                        landingTicksAgo));
+                if (landingTicksAgo >= 0 && canPlayLocalHyperSound(player)) {
+                    playLocalHyperSound(player);
+                }
             }
 
             syncSteerInput(player);
@@ -108,6 +116,23 @@ public class BoosterModClient implements ClientModInitializer {
             player.playSound(SoundEvents.EXPERIENCE_ORB_PICKUP, READY_SOUND_VOLUME, READY_SOUND_PITCH);
         }
         hadBoosterCooldown = hasCooldown;
+    }
+
+    private static boolean canPlayLocalHyperSound(LocalPlayer player) {
+        ItemStack legs = player.getItemBySlot(EquipmentSlot.LEGS);
+        return legs.getItem() instanceof BoosterLeggingsItem boosterItem
+                && !player.getCooldowns().isOnCooldown(boosterItem);
+    }
+
+    private static void playLocalHyperSound(LocalPlayer player) {
+        player.playSound(
+                SoundEvents.FIRECHARGE_USE,
+                HYPER_IGNITION_SOUND_VOLUME,
+                HYPER_IGNITION_SOUND_PITCH);
+        player.playSound(
+                SoundEvents.TRIDENT_RIPTIDE_1.value(),
+                HYPER_SURGE_SOUND_VOLUME,
+                HYPER_SURGE_SOUND_PITCH);
     }
 
     private static void renderBoosterCooldownIndicator(GuiGraphics drawContext) {

@@ -20,7 +20,7 @@ public final class BoosterMotionTicker {
             ResourceLocation.fromNamespaceAndPath(BoosterMod.MOD_ID, "boost_step_height");
     private static final double STEP_HEIGHT_BOOST = 0.5;
     private static final double GROUND_JUMP_KICK = 0.42;
-    private static final double HYPER_IMPULSE_MULTIPLIER = 1.25;
+    private static final double HYPER_IMPULSE_MULTIPLIER = 1.75;
     private static final Map<UUID, ActiveBoost> ACTIVE = new ConcurrentHashMap<>();
 
     private BoosterMotionTicker() {}

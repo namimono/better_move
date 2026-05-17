@@ -28,8 +28,6 @@ public class BoosterLeggingsItem extends Item implements Equipable {
     private static final float MOVEMENT_BOOST_HUNGER_EXHAUSTION = 1.0f;
     private static final float BOOST_SOUND_VOLUME = 1.0f;
     private static final float BOOST_SOUND_PITCH = 1.2f;
-    private static final float HYPER_CONFIRM_VOLUME = 0.45f;
-    private static final float HYPER_CONFIRM_PITCH = 1.75f;
     /** 起跳前的最小前向探测距离：若该格内无法容纳玩家，则视为贴墙，不消耗冷却。 */
     private static final double FORWARD_PROBE_DISTANCE = 0.1;
     /** 探测前向时允许上抬的最大高度（与 {@link BoosterMotionTicker} 的 step height 提升保持一致）。 */
@@ -170,13 +168,6 @@ public class BoosterLeggingsItem extends Item implements Equipable {
 
         level.playSound(null, originEye.x, originEye.y, originEye.z,
                 SoundEvents.BREEZE_SHOOT, SoundSource.PLAYERS, BOOST_SOUND_VOLUME, BOOST_SOUND_PITCH);
-        if (hyper) {
-            level.playSound(null, originEye.x, originEye.y, originEye.z,
-                    SoundEvents.EXPERIENCE_ORB_PICKUP,
-                    SoundSource.PLAYERS,
-                    HYPER_CONFIRM_VOLUME,
-                    HYPER_CONFIRM_PITCH);
-        }
 
         BoosterMotionTicker.start(level, player, direction, balance, originEye, eyeOffsetY, hyper, groundLaunch);
     }
