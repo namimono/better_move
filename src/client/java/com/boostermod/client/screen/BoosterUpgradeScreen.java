@@ -12,8 +12,8 @@ public class BoosterUpgradeScreen extends AbstractContainerScreen<BoosterUpgrade
     private static final int VANILLA_HIGHLIGHT = 0xFFFFFFFF;
     private static final int VANILLA_LOWLIGHT = 0xFF555555;
     private static final int VANILLA_SHADOW = 0xFF8B8B8B;
-    private static final int VANILLA_SLOT = 0xFF373737;
-    private static final int LOCKED_SLOT_OVERLAY = 0x7F000000;
+    private static final int VANILLA_SLOT = 0xFF8B8B8B;
+    private static final int LOCKED_SLOT_OVERLAY = 0x33000000;
     private static final int LOCKED_MARK_COLOR = 0xFF6F6F6F;
     private static final int TEXT_COLOR = 0xFF404040;
 
