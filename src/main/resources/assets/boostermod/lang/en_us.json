@@ -7,6 +7,9 @@
 	"item.boostermod.booster_leggings_gold": "Golden Booster Leggings",
 	"item.boostermod.booster_leggings_diamond": "Diamond Booster Leggings",
 	"item.boostermod.booster_leggings_netherite": "Netherite Booster Leggings",
+	"item.boostermod.air_dash_upgrade": "Air Dash Upgrade",
+	"item.boostermod.air_dash_upgrade.tooltip": "Allows booster leggings to dash in midair.",
+	"container.boostermod.booster_upgrade": "Booster Upgrades",
 	"key.categories.boostermod": "Booster Mod",
 	"key.boostermod.boost": "Boost"
 }

@@ -3,7 +3,10 @@ package com.boostermod.item;
 import com.boostermod.balance.BoosterBalanceManager;
 import com.boostermod.balance.BoosterBalanceProfile;
 import com.boostermod.network.BoosterFeedbackPayload;
+import com.boostermod.screen.BoosterUpgradeMenuProvider;
 import com.boostermod.tier.BoosterTier;
+import com.boostermod.upgrade.BoosterUpgradeHelper;
+import com.boostermod.upgrade.BoosterUpgradeType;
 import net.minecraft.core.Holder;
 import net.minecraft.core.particles.ParticleTypes;
 import net.fabricmc.fabric.api.networking.v1.ServerPlayNetworking;
@@ -49,6 +52,10 @@ public class BoosterLeggingsItem extends Item implements Equipable {
         return EquipmentSlot.LEGS;
     }
 
+    public BoosterTier getTier() {
+        return tier;
+    }
+
     @Override
     public Holder<SoundEvent> getEquipSound() {
         return SoundEvents.ARMOR_EQUIP_LEATHER;
@@ -56,7 +63,15 @@ public class BoosterLeggingsItem extends Item implements Equipable {
 
     @Override
     public InteractionResultHolder<ItemStack> use(Level level, Player player, InteractionHand hand) {
-        return this.swapWithEquipmentSlot(this, level, player, hand);
+        ItemStack stack = player.getItemInHand(hand);
+        if (player.isSecondaryUseActive()) {
+            return this.swapWithEquipmentSlot(this, level, player, hand);
+        }
+
+        if (!level.isClientSide && player instanceof ServerPlayer serverPlayer) {
+            serverPlayer.openMenu(new BoosterUpgradeMenuProvider(hand));
+        }
+        return InteractionResultHolder.sidedSuccess(stack, level.isClientSide);
     }
 
     public static void tryBoostFromKey(
@@ -82,6 +97,11 @@ public class BoosterLeggingsItem extends Item implements Equipable {
 
         ServerLevel level = player.serverLevel();
         boolean groundLaunch = player.onGround();
+        if (!groundLaunch && !BoosterUpgradeHelper.hasUpgrade(
+                legs, BoosterUpgradeType.AIR_DASH, player.registryAccess())) {
+            return;
+        }
+
         Vec3 direction = boosterItem.resolveBoostDirection(level, player, groundLaunch);
         if (direction == null) {
             return;
