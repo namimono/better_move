@@ -1,12 +1,15 @@
 {
-	"itemGroup.boostermod.main": "推进器模组",
-	"item.boostermod.booster_leggings_wood": "木质推进器护腿",
-	"item.boostermod.booster_leggings_stone": "石质推进器护腿",
-	"item.boostermod.booster_leggings_copper": "铜质推进器护腿",
-	"item.boostermod.booster_leggings_iron": "铁质推进器护腿",
-	"item.boostermod.booster_leggings_gold": "金质推进器护腿",
-	"item.boostermod.booster_leggings_diamond": "钻石推进器护腿",
-	"item.boostermod.booster_leggings_netherite": "下界合金推进器护腿",
-	"key.categories.boostermod": "推进器模组",
-	"key.boostermod.boost": "推进"
+	"itemGroup.boostermod.main": "\u63a8\u8fdb\u5668\u6a21\u7ec4",
+	"item.boostermod.booster_leggings_wood": "\u6728\u8d28\u63a8\u8fdb\u5668\u62a4\u817f",
+	"item.boostermod.booster_leggings_stone": "\u77f3\u8d28\u63a8\u8fdb\u5668\u62a4\u817f",
+	"item.boostermod.booster_leggings_copper": "\u94dc\u8d28\u63a8\u8fdb\u5668\u62a4\u817f",
+	"item.boostermod.booster_leggings_iron": "\u94c1\u8d28\u63a8\u8fdb\u5668\u62a4\u817f",
+	"item.boostermod.booster_leggings_gold": "\u91d1\u8d28\u63a8\u8fdb\u5668\u62a4\u817f",
+	"item.boostermod.booster_leggings_diamond": "\u94bb\u77f3\u63a8\u8fdb\u5668\u62a4\u817f",
+	"item.boostermod.booster_leggings_netherite": "\u4e0b\u754c\u5408\u91d1\u63a8\u8fdb\u5668\u62a4\u817f",
+	"item.boostermod.air_dash_upgrade": "\u7a7a\u4e2d\u63a8\u8fdb\u5347\u7ea7\u9879",
+	"item.boostermod.air_dash_upgrade.tooltip": "\u5141\u8bb8\u63a8\u8fdb\u5668\u62a4\u817f\u5728\u7a7a\u4e2d\u51b2\u523a\u3002",
+	"container.boostermod.booster_upgrade": "\u63a8\u8fdb\u5668\u5347\u7ea7",
+	"key.categories.boostermod": "\u63a8\u8fdb\u5668\u6a21\u7ec4",
+	"key.boostermod.boost": "\u63a8\u8fdb"
 }

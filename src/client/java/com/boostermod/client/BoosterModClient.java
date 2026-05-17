@@ -1,5 +1,7 @@
 package com.boostermod.client;
 
+import com.boostermod.BoosterMod;
+import com.boostermod.client.screen.BoosterUpgradeScreen;
 import com.boostermod.item.BoosterLeggingsItem;
 import com.boostermod.network.BoosterRequestPayload;
 import com.boostermod.network.BoosterSteerPayload;
@@ -12,6 +14,7 @@ import net.fabricmc.fabric.api.client.rendering.v1.HudRenderCallback;
 import net.minecraft.client.KeyMapping;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphics;
+import net.minecraft.client.gui.screens.MenuScreens;
 import net.minecraft.client.player.LocalPlayer;
 import net.minecraft.sounds.SoundEvents;
 import net.minecraft.world.entity.EquipmentSlot;
@@ -39,6 +42,8 @@ public class BoosterModClient implements ClientModInitializer {
 
     @Override
     public void onInitializeClient() {
+        MenuScreens.register(BoosterMod.BOOSTER_UPGRADE_MENU, BoosterUpgradeScreen::new);
+
         boostKey = KeyBindingHelper.registerKeyBinding(new KeyMapping(
                 "key.boostermod.boost",
                 InputConstants.Type.KEYSYM,

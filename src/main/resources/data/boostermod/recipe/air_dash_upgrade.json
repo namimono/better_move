@@ -1,0 +1,23 @@
+{
+  "type": "minecraft:crafting_shaped",
+  "pattern": [
+    " F ",
+    "FCF",
+    " R "
+  ],
+  "key": {
+    "F": {
+      "item": "minecraft:feather"
+    },
+    "C": {
+      "item": "minecraft:copper_ingot"
+    },
+    "R": {
+      "item": "minecraft:redstone"
+    }
+  },
+  "result": {
+    "id": "boostermod:air_dash_upgrade",
+    "count": 1
+  }
+}

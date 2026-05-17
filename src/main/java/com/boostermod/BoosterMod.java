@@ -5,7 +5,11 @@ import com.boostermod.item.BoosterLeggingsItem;
 import com.boostermod.item.BoosterMotionTicker;
 import com.boostermod.network.BoosterRequestPayload;
 import com.boostermod.network.BoosterSteerPayload;
+import com.boostermod.screen.BoosterUpgradeMenu;
+import com.boostermod.screen.BoosterUpgradeOpenData;
 import com.boostermod.tier.BoosterTier;
+import com.boostermod.upgrade.BoosterUpgradeItem;
+import com.boostermod.upgrade.BoosterUpgradeType;
 import net.fabricmc.api.ModInitializer;
 import net.fabricmc.fabric.api.command.v2.CommandRegistrationCallback;
 import net.fabricmc.fabric.api.event.lifecycle.v1.ServerTickEvents;
@@ -13,6 +17,7 @@ import net.fabricmc.fabric.api.itemgroup.v1.FabricItemGroup;
 import net.fabricmc.fabric.api.networking.v1.PayloadTypeRegistry;
 import net.fabricmc.fabric.api.networking.v1.ServerPlayConnectionEvents;
 import net.fabricmc.fabric.api.networking.v1.ServerPlayNetworking;
+import net.fabricmc.fabric.api.screenhandler.v1.ExtendedScreenHandlerType;
 import net.minecraft.core.Registry;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.network.chat.Component;
@@ -21,6 +26,7 @@ import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.item.CreativeModeTab;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.inventory.MenuType;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -35,6 +41,12 @@ public class BoosterMod implements ModInitializer {
     public static final Item BOOSTER_LEGGINGS_GOLD = registerBoosterLeggings(BoosterTier.GOLD);
     public static final Item BOOSTER_LEGGINGS_DIAMOND = registerBoosterLeggings(BoosterTier.DIAMOND);
     public static final Item BOOSTER_LEGGINGS_NETHERITE = registerBoosterLeggings(BoosterTier.NETHERITE);
+    public static final Item AIR_DASH_UPGRADE = registerUpgrade("air_dash_upgrade", BoosterUpgradeType.AIR_DASH);
+
+    public static final MenuType<BoosterUpgradeMenu> BOOSTER_UPGRADE_MENU = Registry.register(
+            BuiltInRegistries.MENU,
+            id("booster_upgrade"),
+            new ExtendedScreenHandlerType<>(BoosterUpgradeMenu::new, BoosterUpgradeOpenData.CODEC));
 
     public static final ResourceKey<CreativeModeTab> ITEM_GROUP_KEY =
             ResourceKey.create(BuiltInRegistries.CREATIVE_MODE_TAB.key(), id("main"));
@@ -55,6 +67,7 @@ public class BoosterMod implements ModInitializer {
                             output.accept(BOOSTER_LEGGINGS_GOLD);
                             output.accept(BOOSTER_LEGGINGS_DIAMOND);
                             output.accept(BOOSTER_LEGGINGS_NETHERITE);
+                            output.accept(AIR_DASH_UPGRADE);
                         })
                         .build()
         );
@@ -93,6 +106,14 @@ public class BoosterMod implements ModInitializer {
                 .stacksTo(1)
                 .durability(tier.getDurability());
         BoosterLeggingsItem item = new BoosterLeggingsItem(properties, tier);
+        return Registry.register(BuiltInRegistries.ITEM, key, item);
+    }
+
+    private static Item registerUpgrade(String name, BoosterUpgradeType type) {
+        ResourceLocation location = id(name);
+        ResourceKey<Item> key = ResourceKey.create(BuiltInRegistries.ITEM.key(), location);
+        Item.Properties properties = new Item.Properties().stacksTo(1);
+        BoosterUpgradeItem item = new BoosterUpgradeItem(properties, type);
         return Registry.register(BuiltInRegistries.ITEM, key, item);
     }
 

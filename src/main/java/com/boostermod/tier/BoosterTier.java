@@ -7,31 +7,34 @@ package com.boostermod.tier;
  * 大致符合 <code>d ≈ impulse * 11 + Σ(thrust)</code> 的量级。</p>
  */
 public enum BoosterTier {
-    WOOD("wood", 0.55, 0.020, 10, 30),
-    STONE("stone", 0.65, 0.025, 10, 65),
-    COPPER("copper", 0.75, 0.030, 10, 100),
-    IRON("iron", 0.90, 0.040, 10, 175),
-    GOLD("gold", 1.05, 0.050, 10, 24),
-    DIAMOND("diamond", 1.20, 0.060, 10, 750),
-    NETHERITE("netherite", 1.40, 0.080, 10, 1016);
+    WOOD("wood", 0.55, 0.020, 10, 30, 0),
+    STONE("stone", 0.65, 0.025, 10, 65, 0),
+    COPPER("copper", 0.75, 0.030, 10, 100, 2),
+    IRON("iron", 0.90, 0.040, 10, 175, 3),
+    GOLD("gold", 1.05, 0.050, 10, 24, 4),
+    DIAMOND("diamond", 1.20, 0.060, 10, 750, 5),
+    NETHERITE("netherite", 1.40, 0.080, 10, 1016, 6);
 
     private final String id;
     private final double impulse;
     private final double thrustPerTick;
     private final int thrustTicks;
     private final int durability;
+    private final int upgradeSlots;
 
     BoosterTier(
             String id,
             double impulse,
             double thrustPerTick,
             int thrustTicks,
-            int durability) {
+            int durability,
+            int upgradeSlots) {
         this.id = id;
         this.impulse = impulse;
         this.thrustPerTick = thrustPerTick;
         this.thrustTicks = thrustTicks;
         this.durability = durability;
+        this.upgradeSlots = upgradeSlots;
     }
 
     public String getId() {
@@ -52,5 +55,9 @@ public enum BoosterTier {
 
     public int getDurability() {
         return durability;
+    }
+
+    public int getUpgradeSlots() {
+        return upgradeSlots;
     }
 }
