@@ -2,9 +2,11 @@ package com.boostermod.item;
 
 import com.boostermod.balance.BoosterBalanceManager;
 import com.boostermod.balance.BoosterBalanceProfile;
+import com.boostermod.network.BoosterFeedbackPayload;
 import com.boostermod.tier.BoosterTier;
 import net.minecraft.core.Holder;
 import net.minecraft.core.particles.ParticleTypes;
+import net.fabricmc.fabric.api.networking.v1.ServerPlayNetworking;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
@@ -85,8 +87,9 @@ public class BoosterLeggingsItem extends Item implements Equipable {
             return;
         }
 
-        boosterItem.applyBoost(
-                level, player, legs, direction, isHyperBoost(player, jumpTicksAgo, landingTicksAgo), groundLaunch);
+        boolean hyper = isHyperBoost(player, jumpTicksAgo, landingTicksAgo);
+        boosterItem.applyBoost(level, player, legs, direction, hyper, groundLaunch);
+        ServerPlayNetworking.send(player, new BoosterFeedbackPayload(hyper));
         player.getCooldowns().addCooldown(boosterItem, COOLDOWN_TICKS);
         player.swing(InteractionHand.MAIN_HAND, true);
     }

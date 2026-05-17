@@ -3,6 +3,7 @@ package com.boostermod;
 import com.boostermod.command.BoosterModCommand;
 import com.boostermod.item.BoosterLeggingsItem;
 import com.boostermod.item.BoosterMotionTicker;
+import com.boostermod.network.BoosterFeedbackPayload;
 import com.boostermod.network.BoosterRequestPayload;
 import com.boostermod.network.BoosterSteerPayload;
 import com.boostermod.tier.BoosterTier;
@@ -61,6 +62,7 @@ public class BoosterMod implements ModInitializer {
 
         PayloadTypeRegistry.playC2S().register(BoosterRequestPayload.TYPE, BoosterRequestPayload.CODEC);
         PayloadTypeRegistry.playC2S().register(BoosterSteerPayload.TYPE, BoosterSteerPayload.CODEC);
+        PayloadTypeRegistry.playS2C().register(BoosterFeedbackPayload.TYPE, BoosterFeedbackPayload.CODEC);
 
         ServerPlayNetworking.registerGlobalReceiver(BoosterRequestPayload.TYPE, (payload, context) ->
                 context.server().execute(() ->

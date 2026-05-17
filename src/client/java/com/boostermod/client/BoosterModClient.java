@@ -1,6 +1,7 @@
 package com.boostermod.client;
 
 import com.boostermod.item.BoosterLeggingsItem;
+import com.boostermod.network.BoosterFeedbackPayload;
 import com.boostermod.network.BoosterRequestPayload;
 import com.boostermod.network.BoosterSteerPayload;
 import com.mojang.blaze3d.platform.InputConstants;
@@ -23,10 +24,6 @@ public class BoosterModClient implements ClientModInitializer {
     private static final int HYPER_WINDOW_TICKS = 3;
     private static final float READY_SOUND_VOLUME = 0.2f;
     private static final float READY_SOUND_PITCH = 1.8f;
-    private static final float HYPER_IGNITION_SOUND_VOLUME = 0.70f;
-    private static final float HYPER_IGNITION_SOUND_PITCH = 1.65f;
-    private static final float HYPER_SURGE_SOUND_VOLUME = 0.35f;
-    private static final float HYPER_SURGE_SOUND_PITCH = 0.85f;
 
     public static KeyMapping boostKey;
 
@@ -46,7 +43,12 @@ public class BoosterModClient implements ClientModInitializer {
                 "key.categories.boostermod"
         ));
 
-        HudRenderCallback.EVENT.register((drawContext, tickCounter) -> renderBoosterCooldownIndicator(drawContext));
+        ClientPlayNetworking.registerGlobalReceiver(BoosterFeedbackPayload.TYPE, (payload, context) ->
+                context.client().execute(() -> BoosterFeedbackEffects.trigger(payload.hyper())));
+
+        HudRenderCallback.EVENT.register((drawContext, tickCounter) -> {
+            renderBoosterCooldownIndicator(drawContext);
+        });
 
         ClientTickEvents.END_CLIENT_TICK.register(client -> {
             LocalPlayer player = client.player;
@@ -58,6 +60,7 @@ public class BoosterModClient implements ClientModInitializer {
 
             trackHyperWindows(player);
             tickReadySound(player);
+            BoosterFeedbackEffects.tick();
 
             while (boostKey.consumeClick()) {
                 int landingTicksAgo = landingTicksAgoForPayload();
@@ -66,9 +69,6 @@ public class BoosterModClient implements ClientModInitializer {
                         intendedBoostDirZ(player),
                         -1,
                         landingTicksAgo));
-                if (landingTicksAgo >= 0 && canPlayLocalHyperSound(player)) {
-                    playLocalHyperSound(player);
-                }
             }
 
             syncSteerInput(player);
@@ -116,23 +116,6 @@ public class BoosterModClient implements ClientModInitializer {
             player.playSound(SoundEvents.EXPERIENCE_ORB_PICKUP, READY_SOUND_VOLUME, READY_SOUND_PITCH);
         }
         hadBoosterCooldown = hasCooldown;
-    }
-
-    private static boolean canPlayLocalHyperSound(LocalPlayer player) {
-        ItemStack legs = player.getItemBySlot(EquipmentSlot.LEGS);
-        return legs.getItem() instanceof BoosterLeggingsItem boosterItem
-                && !player.getCooldowns().isOnCooldown(boosterItem);
-    }
-
-    private static void playLocalHyperSound(LocalPlayer player) {
-        player.playSound(
-                SoundEvents.FIRECHARGE_USE,
-                HYPER_IGNITION_SOUND_VOLUME,
-                HYPER_IGNITION_SOUND_PITCH);
-        player.playSound(
-                SoundEvents.GENERIC_EXPLODE.value(),
-                HYPER_SURGE_SOUND_VOLUME,
-                HYPER_SURGE_SOUND_PITCH);
     }
 
     private static void renderBoosterCooldownIndicator(GuiGraphics drawContext) {
