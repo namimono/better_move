@@ -30,6 +30,7 @@ public class BoosterUpgradeScreen extends AbstractContainerScreen<BoosterUpgrade
         int y = topPos;
         drawVanillaPanel(graphics, x, y, imageWidth, imageHeight);
         drawVanillaInset(graphics, x + 26, y + 25, 124, 36);
+        drawPlayerInventorySlots(graphics, x, y);
 
         for (int i = 0; i < BoosterUpgradeHelper.MAX_SLOTS; i++) {
             boolean active = i < menu.getActiveSlots();
@@ -79,5 +80,17 @@ public class BoosterUpgradeScreen extends AbstractContainerScreen<BoosterUpgrade
         graphics.fill(x + 17, y + 1, x + 18, y + 18, VANILLA_HIGHLIGHT);
         graphics.fill(x + 1, y + 17, x + 18, y + 18, VANILLA_HIGHLIGHT);
         graphics.fill(x + 1, y + 1, x + 17, y + 17, VANILLA_SLOT);
+    }
+
+    private static void drawPlayerInventorySlots(GuiGraphics graphics, int x, int y) {
+        for (int row = 0; row < 3; row++) {
+            for (int col = 0; col < 9; col++) {
+                drawVanillaSlot(graphics, x + 7 + col * 18, y + 83 + row * 18);
+            }
+        }
+
+        for (int col = 0; col < 9; col++) {
+            drawVanillaSlot(graphics, x + 7 + col * 18, y + 141);
+        }
     }
 }
