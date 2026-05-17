@@ -23,10 +23,10 @@ public class BoosterModClient implements ClientModInitializer {
     private static final int HYPER_WINDOW_TICKS = 3;
     private static final float READY_SOUND_VOLUME = 0.2f;
     private static final float READY_SOUND_PITCH = 1.8f;
-    private static final float HYPER_IGNITION_SOUND_VOLUME = 1.05f;
+    private static final float HYPER_IGNITION_SOUND_VOLUME = 0.70f;
     private static final float HYPER_IGNITION_SOUND_PITCH = 1.65f;
-    private static final float HYPER_SURGE_SOUND_VOLUME = 0.65f;
-    private static final float HYPER_SURGE_SOUND_PITCH = 1.35f;
+    private static final float HYPER_SURGE_SOUND_VOLUME = 0.35f;
+    private static final float HYPER_SURGE_SOUND_PITCH = 0.85f;
 
     public static KeyMapping boostKey;
 
@@ -130,7 +130,7 @@ public class BoosterModClient implements ClientModInitializer {
                 HYPER_IGNITION_SOUND_VOLUME,
                 HYPER_IGNITION_SOUND_PITCH);
         player.playSound(
-                SoundEvents.TRIDENT_RIPTIDE_1.value(),
+                SoundEvents.GENERIC_EXPLODE.value(),
                 HYPER_SURGE_SOUND_VOLUME,
                 HYPER_SURGE_SOUND_PITCH);
     }
