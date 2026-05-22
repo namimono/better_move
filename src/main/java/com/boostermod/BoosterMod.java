@@ -1,6 +1,7 @@
 package com.boostermod;
 
 import com.boostermod.command.BoosterModCommand;
+import com.boostermod.item.BoosterEquipment;
 import com.boostermod.item.BoosterLeggingsItem;
 import com.boostermod.item.BoosterMotionTicker;
 import com.boostermod.network.BoosterFeedbackPayload;
@@ -96,6 +97,11 @@ public class BoosterMod implements ModInitializer {
         CommandRegistrationCallback.EVENT.register((dispatcher, registryAccess, environment) ->
                 BoosterModCommand.register(dispatcher));
         ServerTickEvents.END_SERVER_TICK.register(BoosterLeggingsItem::tickActiveMotions);
+
+        BoosterEquipment.initTrinketsCompat();
+        if (BoosterEquipment.isTrinketsEnabled()) {
+            LOGGER.info("Trinkets detected: booster can also be equipped in the legs/booster trinket slot.");
+        }
 
         LOGGER.info("Booster Mod initialized.");
     }

@@ -65,6 +65,9 @@ public class BoosterLeggingsItem extends Item implements Equipable {
     public InteractionResultHolder<ItemStack> use(Level level, Player player, InteractionHand hand) {
         ItemStack stack = player.getItemInHand(hand);
         if (player.isSecondaryUseActive()) {
+            if (!level.isClientSide && BoosterEquipment.tryEquipToTrinketSlot(player, stack)) {
+                return InteractionResultHolder.success(stack);
+            }
             return this.swapWithEquipmentSlot(this, level, player, hand);
         }
 
@@ -80,10 +83,12 @@ public class BoosterLeggingsItem extends Item implements Equipable {
             double clientDirZ,
             int jumpTicksAgo,
             int landingTicksAgo) {
-        ItemStack legs = player.getItemBySlot(EquipmentSlot.LEGS);
-        if (!(legs.getItem() instanceof BoosterLeggingsItem boosterItem)) {
+        BoosterEquipment.Equipped equipped = BoosterEquipment.find(player).orElse(null);
+        if (equipped == null) {
             return;
         }
+        BoosterLeggingsItem boosterItem = equipped.item();
+        ItemStack boosterStack = equipped.stack();
         if (BoosterMotionTicker.isBoosting(player)) {
             return;
         }
@@ -98,7 +103,7 @@ public class BoosterLeggingsItem extends Item implements Equipable {
         ServerLevel level = player.serverLevel();
         boolean groundLaunch = player.onGround();
         if (!groundLaunch && !BoosterUpgradeHelper.hasUpgrade(
-                legs, BoosterUpgradeType.AIR_DASH, player.registryAccess())) {
+                boosterStack, BoosterUpgradeType.AIR_DASH, player.registryAccess())) {
             return;
         }
 
@@ -108,7 +113,7 @@ public class BoosterLeggingsItem extends Item implements Equipable {
         }
 
         boolean hyper = isHyperBoost(player, jumpTicksAgo, landingTicksAgo);
-        boosterItem.applyBoost(level, player, legs, direction, hyper, groundLaunch);
+        boosterItem.applyBoost(level, player, equipped, direction, hyper, groundLaunch);
         ServerPlayNetworking.send(player, new BoosterFeedbackPayload(hyper));
         player.getCooldowns().addCooldown(boosterItem, COOLDOWN_TICKS);
         player.swing(InteractionHand.MAIN_HAND, true);
@@ -176,7 +181,7 @@ public class BoosterLeggingsItem extends Item implements Equipable {
     private void applyBoost(
             ServerLevel level,
             ServerPlayer player,
-            ItemStack legsStack,
+            BoosterEquipment.Equipped equipped,
             Vec3 direction,
             boolean hyper,
             boolean groundLaunch) {
@@ -186,7 +191,7 @@ public class BoosterLeggingsItem extends Item implements Equipable {
 
         player.causeFoodExhaustion(MOVEMENT_BOOST_HUNGER_EXHAUSTION);
         if (!player.getAbilities().instabuild) {
-            legsStack.hurtAndBreak(1, player, EquipmentSlot.LEGS);
+            equipped.applyBoostDamage(player, level);
         }
 
         level.playSound(null, originEye.x, originEye.y, originEye.z,

@@ -11,5 +11,6 @@
 	"item.boostermod.air_dash_upgrade.tooltip": "\u5141\u8bb8\u63a8\u8fdb\u5668\u62a4\u817f\u5728\u7a7a\u4e2d\u51b2\u523a\u3002",
 	"container.boostermod.booster_upgrade": "\u63a8\u8fdb\u5668\u5347\u7ea7",
 	"key.categories.boostermod": "\u63a8\u8fdb\u5668\u6a21\u7ec4",
-	"key.boostermod.boost": "\u63a8\u8fdb"
+	"key.boostermod.boost": "\u63a8\u8fdb",
+	"trinkets.slot.legs.booster": "\u63a8\u8fdb\u5668"
 }

@@ -3,7 +3,7 @@
 	"id": "boostermod",
 	"version": "${version}",
 	"name": "Booster Mod",
-	"description": "可升级的推进器护腿模组：装备到腿部槽位，按下推进键沿移动方向进行喷射推进。",
+	"description": "可升级的推进器护腿模组：默认可装备到护腿槽；安装 Trinkets 后也可装备到饰品槽，与原版裤子并存。",
 	"authors": [
 		"Gigabyte"
 	],
@@ -28,5 +28,8 @@
 		"minecraft": "~1.21.1",
 		"java": ">=21",
 		"fabric-api": "*"
+	},
+	"suggests": {
+		"trinkets": ">=3.10.0"
 	}
 }
