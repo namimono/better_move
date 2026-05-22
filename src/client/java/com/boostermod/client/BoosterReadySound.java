@@ -1,10 +1,9 @@
 package com.boostermod.client;
 
+import com.boostermod.item.BoosterEquipment;
 import com.boostermod.item.BoosterLeggingsItem;
 import net.minecraft.client.player.LocalPlayer;
 import net.minecraft.sounds.SoundEvents;
-import net.minecraft.world.entity.EquipmentSlot;
-import net.minecraft.world.item.ItemStack;
 
 final class BoosterReadySound {
     private static final float READY_SOUND_VOLUME = 0.2f;
@@ -19,8 +18,12 @@ final class BoosterReadySound {
     }
 
     static void tick(LocalPlayer player) {
-        ItemStack legs = player.getItemBySlot(EquipmentSlot.LEGS);
-        if (!(legs.getItem() instanceof BoosterLeggingsItem boosterItem)) {
+        BoosterEquipment.Equipped equipped = BoosterEquipment.find(player).orElse(null);
+        if (equipped == null) {
+            reset();
+            return;
+        }
+        if (!(equipped.item() instanceof BoosterLeggingsItem boosterItem)) {
             reset();
             return;
         }

@@ -1,10 +1,10 @@
 package com.boostermod.client;
 
+import com.boostermod.item.BoosterEquipment;
 import com.boostermod.item.BoosterLeggingsItem;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.player.LocalPlayer;
-import net.minecraft.world.entity.EquipmentSlot;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
 
@@ -18,11 +18,13 @@ final class BoosterCooldownHud {
             return;
         }
 
-        ItemStack legs = player.getItemBySlot(EquipmentSlot.LEGS);
-        Item item = legs.getItem();
-        if (!(item instanceof BoosterLeggingsItem)) {
+        BoosterEquipment.Equipped equipped = BoosterEquipment.find(player).orElse(null);
+        if (equipped == null) {
             return;
         }
+
+        ItemStack legs = equipped.stack();
+        Item item = equipped.item();
 
         float cooldownRemaining = player.getCooldowns().getCooldownPercent(item, 0.0f);
         boolean ready = cooldownRemaining <= 0.0f;

@@ -11,5 +11,6 @@
 	"item.boostermod.air_dash_upgrade.tooltip": "Allows booster leggings to dash in midair.",
 	"container.boostermod.booster_upgrade": "Booster Upgrades",
 	"key.categories.boostermod": "Booster Mod",
-	"key.boostermod.boost": "Boost"
+	"key.boostermod.boost": "Boost",
+	"trinkets.slot.legs.booster": "Booster"
 }
