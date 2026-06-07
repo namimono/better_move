@@ -27,6 +27,13 @@ loom {
 		}
 	}
 
+	runs {
+		client {
+			programArg "--username"
+			programArg "PlayA"
+		}
+	}
+
 }
 
 dependencies {

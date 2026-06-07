@@ -3,10 +3,12 @@ package com.boostermod.client;
 import com.boostermod.BoosterMod;
 import com.boostermod.client.screen.BoosterUpgradeScreen;
 import com.boostermod.network.BoosterFeedbackPayload;
+import com.boostermod.network.BoosterHudStatePayload;
 import com.mojang.blaze3d.platform.InputConstants;
 import net.fabricmc.api.ClientModInitializer;
 import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents;
 import net.fabricmc.fabric.api.client.keybinding.v1.KeyBindingHelper;
+import net.fabricmc.fabric.api.client.networking.v1.ClientPlayConnectionEvents;
 import net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking;
 import net.fabricmc.fabric.api.client.rendering.v1.HudRenderCallback;
 import net.minecraft.client.KeyMapping;
@@ -30,6 +32,9 @@ public class BoosterModClient implements ClientModInitializer {
 
         ClientPlayNetworking.registerGlobalReceiver(BoosterFeedbackPayload.TYPE, (payload, context) ->
                 context.client().execute(() -> BoosterFeedbackEffects.trigger(payload.hyper())));
+        ClientPlayNetworking.registerGlobalReceiver(BoosterHudStatePayload.TYPE, (payload, context) ->
+                context.client().execute(() -> BoosterHudState.setEnabled(payload.enabled())));
+        ClientPlayConnectionEvents.DISCONNECT.register((handler, client) -> BoosterHudState.reset());
 
         HudRenderCallback.EVENT.register((drawContext, tickCounter) -> BoosterCooldownHud.render(drawContext));
 

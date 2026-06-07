@@ -1,8 +1,10 @@
 package com.boostermod.command;
 
+import com.boostermod.BoosterMod;
 import com.boostermod.balance.BoosterBalanceField;
 import com.boostermod.balance.BoosterBalanceManager;
 import com.boostermod.balance.BoosterBalanceProfile;
+import com.boostermod.hud.BoosterHudSettings;
 import com.boostermod.tier.BoosterTier;
 import com.mojang.brigadier.CommandDispatcher;
 import com.mojang.brigadier.arguments.DoubleArgumentType;
@@ -29,6 +31,13 @@ public final class BoosterModCommand {
     public static void register(CommandDispatcher<CommandSourceStack> dispatcher) {
         dispatcher.register(Commands.literal("boostermod")
                 .requires(source -> source.hasPermission(2))
+                .then(Commands.literal("hud")
+                        .then(Commands.literal("status")
+                                .executes(BoosterModCommand::hudStatus))
+                        .then(Commands.literal("on")
+                                .executes(context -> setHudEnabled(context, true)))
+                        .then(Commands.literal("off")
+                                .executes(context -> setHudEnabled(context, false))))
                 .then(Commands.literal("balance")
                         .then(Commands.literal("show")
                                 .executes(BoosterModCommand::showAll)
@@ -99,6 +108,25 @@ public final class BoosterModCommand {
         for (BoosterTier tier : BoosterTier.values()) {
             sendProfile(context.getSource(), tier, manager.getProfile(tier));
         }
+        return 1;
+    }
+
+    private static int hudStatus(CommandContext<CommandSourceStack> context) {
+        boolean enabled = BoosterHudSettings.get(context.getSource().getServer()).isEnabled();
+        context.getSource().sendSuccess(
+                () -> Component.literal("Booster HUD is currently " + (enabled ? "enabled" : "disabled") + "."),
+                false);
+        return 1;
+    }
+
+    private static int setHudEnabled(CommandContext<CommandSourceStack> context, boolean enabled) {
+        BoosterHudSettings settings = BoosterHudSettings.get(context.getSource().getServer());
+        boolean changed = settings.setEnabled(enabled);
+        BoosterMod.syncHudState(context.getSource().getServer());
+        context.getSource().sendSuccess(
+                () -> Component.literal(
+                        "Booster HUD " + (enabled ? "enabled" : "disabled") + (changed ? "." : " (unchanged).")),
+                true);
         return 1;
     }
 

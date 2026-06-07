@@ -14,7 +14,7 @@ final class BoosterCooldownHud {
     static void render(GuiGraphics drawContext) {
         Minecraft client = Minecraft.getInstance();
         LocalPlayer player = client.player;
-        if (player == null || client.options.hideGui) {
+        if (player == null || client.options.hideGui || !BoosterHudState.isEnabled()) {
             return;
         }
 
