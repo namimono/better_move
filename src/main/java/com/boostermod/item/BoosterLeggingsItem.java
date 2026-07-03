@@ -2,11 +2,17 @@ package com.boostermod.item;
 
 import com.boostermod.balance.BoosterBalanceManager;
 import com.boostermod.balance.BoosterBalanceProfile;
+import com.boostermod.feature.BoosterFeature;
+import com.boostermod.feature.BoosterFeatureSettings;
 import com.boostermod.network.BoosterFeedbackPayload;
 import com.boostermod.screen.BoosterUpgradeMenuProvider;
 import com.boostermod.tier.BoosterTier;
 import com.boostermod.upgrade.BoosterUpgradeHelper;
 import com.boostermod.upgrade.BoosterUpgradeType;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.concurrent.ThreadLocalRandom;
+import net.minecraft.core.BlockPos;
 import net.minecraft.core.Holder;
 import net.minecraft.core.particles.ParticleTypes;
 import net.fabricmc.fabric.api.networking.v1.ServerPlayNetworking;
@@ -24,6 +30,7 @@ import net.minecraft.world.item.Equipable;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.Level;
+import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.Vec3;
 
@@ -39,6 +46,11 @@ public class BoosterLeggingsItem extends Item implements Equipable {
     private static final double PROBE_STEP_UP_MAX = 1.0;
     private static final double PROBE_STEP_UP_GRAIN = 0.05;
     private static final int MIN_FOOD_LEVEL = 6;
+    private static final int BURROW_DEPTH_BLOCKS = 6;
+    private static final double RANDOM_IMPULSE_MIN = 0.1;
+    private static final double RANDOM_IMPULSE_MAX = 1.0;
+    private static final double BOX_EDGE_EPSILON = 1.0e-7;
+    private static final Vec3 VERTICAL_LAUNCH_DIRECTION = new Vec3(0.0, 1.0, 0.0);
 
     private final BoosterTier tier;
 
@@ -92,7 +104,10 @@ public class BoosterLeggingsItem extends Item implements Equipable {
         if (BoosterMotionTicker.isBoosting(player)) {
             return;
         }
-        if (player.getCooldowns().isOnCooldown(boosterItem)) {
+
+        BoosterFeatureSettings features = BoosterFeatureSettings.get(player.server);
+        boolean noCooldown = features.isEnabled(BoosterFeature.NO_COOLDOWN);
+        if (!noCooldown && player.getCooldowns().isOnCooldown(boosterItem)) {
             return;
         }
         boolean creative = player.getAbilities().instabuild;
@@ -107,15 +122,38 @@ public class BoosterLeggingsItem extends Item implements Equipable {
             return;
         }
 
-        Vec3 direction = boosterItem.resolveBoostDirection(level, player, groundLaunch);
+        if (features.isEnabled(BoosterFeature.BURROW)) {
+            if (!boosterItem.applyBurrow(level, player, equipped)) {
+                return;
+            }
+            ServerPlayNetworking.send(player, new BoosterFeedbackPayload(false));
+            if (!noCooldown) {
+                player.getCooldowns().addCooldown(boosterItem, COOLDOWN_TICKS);
+            }
+            player.swing(InteractionHand.MAIN_HAND, true);
+            return;
+        }
+
+        Vec3 direction = features.isEnabled(BoosterFeature.VERTICAL_LAUNCH)
+                ? VERTICAL_LAUNCH_DIRECTION
+                : boosterItem.resolveBoostDirection(level, player, groundLaunch);
         if (direction == null) {
             return;
         }
 
         boolean hyper = isHyperBoost(player, jumpTicksAgo, landingTicksAgo);
-        boosterItem.applyBoost(level, player, equipped, direction, hyper, groundLaunch);
+        boosterItem.applyBoost(
+                level,
+                player,
+                equipped,
+                direction,
+                hyper,
+                groundLaunch,
+                features.isEnabled(BoosterFeature.RANDOM_IMPULSE));
         ServerPlayNetworking.send(player, new BoosterFeedbackPayload(hyper));
-        player.getCooldowns().addCooldown(boosterItem, COOLDOWN_TICKS);
+        if (!noCooldown) {
+            player.getCooldowns().addCooldown(boosterItem, COOLDOWN_TICKS);
+        }
         player.swing(InteractionHand.MAIN_HAND, true);
     }
 
@@ -184,20 +222,121 @@ public class BoosterLeggingsItem extends Item implements Equipable {
             BoosterEquipment.Equipped equipped,
             Vec3 direction,
             boolean hyper,
-            boolean groundLaunch) {
-        BoosterBalanceProfile balance = currentBalance(level);
+            boolean groundLaunch,
+            boolean randomImpulse) {
+        BoosterBalanceProfile balance = randomImpulse ? withRandomImpulse(currentBalance(level)) : currentBalance(level);
         Vec3 originEye = player.getEyePosition();
         double eyeOffsetY = player.getEyeY() - player.getY();
 
+        spendBoostResources(level, player, equipped);
+        playBoostSound(level, originEye);
+
+        BoosterMotionTicker.start(level, player, direction, balance, originEye, eyeOffsetY, hyper, groundLaunch);
+    }
+
+    private boolean applyBurrow(
+            ServerLevel level,
+            ServerPlayer player,
+            BoosterEquipment.Equipped equipped) {
+        Vec3 originEye = player.getEyePosition();
+        double eyeOffsetY = player.getEyeY() - player.getY();
+        int descended = descendByBreakingBlocks(level, player);
+        if (descended <= 0) {
+            return false;
+        }
+
+        spendBoostResources(level, player, equipped);
+        playBoostSound(level, originEye);
+        player.setDeltaMovement(0.0, -0.1, 0.0);
+        player.resetFallDistance();
+        player.hurtMarked = true;
+        emitTrailParticles(level, originEye, player.position().add(0.0, eyeOffsetY, 0.0));
+        return true;
+    }
+
+    private static int descendByBreakingBlocks(ServerLevel level, ServerPlayer player) {
+        int descended = 0;
+        for (int i = 0; i < BURROW_DEPTH_BLOCKS; i++) {
+            AABB targetBox = player.getBoundingBox().move(0.0, -1.0, 0.0);
+            if (!canBurrowInto(level, player, targetBox)) {
+                break;
+            }
+
+            player.teleportTo(player.getX(), player.getY() - 1.0, player.getZ());
+            player.resetFallDistance();
+            player.hurtMarked = true;
+            descended++;
+        }
+        return descended;
+    }
+
+    private static boolean canBurrowInto(ServerLevel level, ServerPlayer player, AABB targetBox) {
+        if (!level.getWorldBorder().isWithinBounds(targetBox) || !level.getEntityCollisions(player, targetBox).isEmpty()) {
+            return false;
+        }
+
+        List<BlockPos> blocksToBreak = collectBreakableBlocks(level, targetBox);
+        if (blocksToBreak == null) {
+            return false;
+        }
+
+        for (BlockPos pos : blocksToBreak) {
+            if (!level.destroyBlock(pos, true, player)) {
+                return false;
+            }
+        }
+        return !level.getBlockCollisions(player, targetBox).iterator().hasNext();
+    }
+
+    private static List<BlockPos> collectBreakableBlocks(ServerLevel level, AABB box) {
+        List<BlockPos> blocks = new ArrayList<>();
+        int minX = floorInside(box.minX);
+        int minY = floorInside(box.minY);
+        int minZ = floorInside(box.minZ);
+        int maxX = floorInside(box.maxX - BOX_EDGE_EPSILON);
+        int maxY = floorInside(box.maxY - BOX_EDGE_EPSILON);
+        int maxZ = floorInside(box.maxZ - BOX_EDGE_EPSILON);
+
+        for (int x = minX; x <= maxX; x++) {
+            for (int y = minY; y <= maxY; y++) {
+                for (int z = minZ; z <= maxZ; z++) {
+                    BlockPos pos = new BlockPos(x, y, z);
+                    BlockState state = level.getBlockState(pos);
+                    if (state.isAir()) {
+                        continue;
+                    }
+                    if (state.getDestroySpeed(level, pos) < 0.0f) {
+                        return null;
+                    }
+                    blocks.add(pos);
+                }
+            }
+        }
+        return blocks;
+    }
+
+    private static int floorInside(double value) {
+        return (int) Math.floor(value + BOX_EDGE_EPSILON);
+    }
+
+    private static void spendBoostResources(
+            ServerLevel level,
+            ServerPlayer player,
+            BoosterEquipment.Equipped equipped) {
         player.causeFoodExhaustion(MOVEMENT_BOOST_HUNGER_EXHAUSTION);
         if (!player.getAbilities().instabuild) {
             equipped.applyBoostDamage(player, level);
         }
+    }
 
+    private static void playBoostSound(ServerLevel level, Vec3 originEye) {
         level.playSound(null, originEye.x, originEye.y, originEye.z,
                 SoundEvents.BREEZE_SHOOT, SoundSource.PLAYERS, BOOST_SOUND_VOLUME, BOOST_SOUND_PITCH);
+    }
 
-        BoosterMotionTicker.start(level, player, direction, balance, originEye, eyeOffsetY, hyper, groundLaunch);
+    private static BoosterBalanceProfile withRandomImpulse(BoosterBalanceProfile balance) {
+        double impulse = ThreadLocalRandom.current().nextDouble(RANDOM_IMPULSE_MIN, RANDOM_IMPULSE_MAX);
+        return new BoosterBalanceProfile(impulse, balance.thrustPerTick(), balance.thrustTicks());
     }
 
     static void emitTrailParticles(ServerLevel level, Vec3 from, Vec3 to) {
