@@ -6,6 +6,7 @@ import com.boostermod.balance.BoosterBalanceManager;
 import com.boostermod.balance.BoosterBalanceProfile;
 import com.boostermod.feature.BoosterFeature;
 import com.boostermod.feature.BoosterFeatureSettings;
+import com.boostermod.feedback.BoosterShakeSettings;
 import com.boostermod.hud.BoosterHudSettings;
 import com.boostermod.tier.BoosterTier;
 import com.mojang.brigadier.CommandDispatcher;
@@ -42,6 +43,13 @@ public final class BoosterModCommand {
                                 .executes(context -> setHudEnabled(context, true)))
                         .then(Commands.literal("off")
                                 .executes(context -> setHudEnabled(context, false))))
+                .then(Commands.literal("shake")
+                        .then(Commands.literal("status")
+                                .executes(BoosterModCommand::shakeStatus))
+                        .then(Commands.literal("on")
+                                .executes(context -> setShakeEnabled(context, true)))
+                        .then(Commands.literal("off")
+                                .executes(context -> setShakeEnabled(context, false))))
                 .then(Commands.literal("feature")
                         .then(Commands.literal("show")
                                 .executes(BoosterModCommand::showFeatures))
@@ -164,6 +172,28 @@ public final class BoosterModCommand {
         context.getSource().sendSuccess(
                 () -> Component.literal(
                         "Booster HUD " + (enabled ? "enabled" : "disabled") + (changed ? "." : " (unchanged).")),
+                true);
+        return 1;
+    }
+
+    private static int shakeStatus(CommandContext<CommandSourceStack> context) {
+        boolean enabled = BoosterShakeSettings.get(context.getSource().getServer()).isEnabled();
+        context.getSource().sendSuccess(
+                () -> Component.literal(
+                        "Booster screen shake is currently " + (enabled ? "enabled" : "disabled") + "."),
+                false);
+        return 1;
+    }
+
+    private static int setShakeEnabled(CommandContext<CommandSourceStack> context, boolean enabled) {
+        BoosterShakeSettings settings = BoosterShakeSettings.get(context.getSource().getServer());
+        boolean changed = settings.setEnabled(enabled);
+        BoosterMod.syncShakeState(context.getSource().getServer());
+        context.getSource().sendSuccess(
+                () -> Component.literal(
+                        "Booster screen shake "
+                                + (enabled ? "enabled" : "disabled")
+                                + (changed ? "." : " (unchanged).")),
                 true);
         return 1;
     }

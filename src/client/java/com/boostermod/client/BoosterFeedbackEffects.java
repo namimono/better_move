@@ -59,6 +59,10 @@ public final class BoosterFeedbackEffects {
     }
 
     public static void applyCameraKick(PoseStack poseStack, float tickDelta) {
+        if (!BoosterShakeState.isEnabled()) {
+            return;
+        }
+
         float pulse = pulse(tickDelta);
         if (pulse <= 0.0f) {
             return;

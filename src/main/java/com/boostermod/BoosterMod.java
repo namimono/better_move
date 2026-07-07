@@ -1,12 +1,14 @@
 package com.boostermod;
 
 import com.boostermod.command.BoosterModCommand;
+import com.boostermod.feedback.BoosterShakeSettings;
 import com.boostermod.hud.BoosterHudSettings;
 import com.boostermod.item.BoosterEquipment;
 import com.boostermod.item.BoosterLeggingsItem;
 import com.boostermod.item.BoosterMotionTicker;
 import com.boostermod.network.BoosterFeedbackPayload;
 import com.boostermod.network.BoosterHudStatePayload;
+import com.boostermod.network.BoosterShakeStatePayload;
 import com.boostermod.network.BoosterRequestPayload;
 import com.boostermod.network.BoosterSteerPayload;
 import com.boostermod.screen.BoosterUpgradeMenu;
@@ -81,6 +83,7 @@ public class BoosterMod implements ModInitializer {
         PayloadTypeRegistry.playC2S().register(BoosterSteerPayload.TYPE, BoosterSteerPayload.CODEC);
         PayloadTypeRegistry.playS2C().register(BoosterFeedbackPayload.TYPE, BoosterFeedbackPayload.CODEC);
         PayloadTypeRegistry.playS2C().register(BoosterHudStatePayload.TYPE, BoosterHudStatePayload.CODEC);
+        PayloadTypeRegistry.playS2C().register(BoosterShakeStatePayload.TYPE, BoosterShakeStatePayload.CODEC);
 
         ServerPlayNetworking.registerGlobalReceiver(BoosterRequestPayload.TYPE, (payload, context) ->
                 context.server().execute(() ->
@@ -97,8 +100,10 @@ public class BoosterMod implements ModInitializer {
         );
         ServerPlayConnectionEvents.DISCONNECT.register((handler, server) ->
                 server.execute(() -> BoosterMotionTicker.cancel(handler.player)));
-        ServerPlayConnectionEvents.JOIN.register((handler, sender, server) -> server.execute(() ->
-                syncHudState(handler.player.server, handler.player)));
+        ServerPlayConnectionEvents.JOIN.register((handler, sender, server) -> server.execute(() -> {
+            syncHudState(handler.player.server, handler.player);
+            syncShakeState(handler.player.server, handler.player);
+        }));
 
         CommandRegistrationCallback.EVENT.register((dispatcher, registryAccess, environment) ->
                 BoosterModCommand.register(dispatcher));
@@ -146,5 +151,18 @@ public class BoosterMod implements ModInitializer {
     public static void syncHudState(MinecraftServer server, net.minecraft.server.level.ServerPlayer player) {
         boolean enabled = BoosterHudSettings.get(server).isEnabled();
         ServerPlayNetworking.send(player, new BoosterHudStatePayload(enabled));
+    }
+
+    public static void syncShakeState(MinecraftServer server) {
+        boolean enabled = BoosterShakeSettings.get(server).isEnabled();
+        BoosterShakeStatePayload payload = new BoosterShakeStatePayload(enabled);
+        for (var player : server.getPlayerList().getPlayers()) {
+            ServerPlayNetworking.send(player, payload);
+        }
+    }
+
+    public static void syncShakeState(MinecraftServer server, net.minecraft.server.level.ServerPlayer player) {
+        boolean enabled = BoosterShakeSettings.get(server).isEnabled();
+        ServerPlayNetworking.send(player, new BoosterShakeStatePayload(enabled));
     }
 }
