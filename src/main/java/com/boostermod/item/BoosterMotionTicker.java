@@ -2,6 +2,7 @@ package com.boostermod.item;
 
 import com.boostermod.BoosterMod;
 import com.boostermod.balance.BoosterBalanceProfile;
+import com.boostermod.combat.BoostStrikeSupport;
 import java.util.Iterator;
 import java.util.Map;
 import java.util.UUID;
@@ -43,6 +44,7 @@ public final class BoosterMotionTicker {
             boolean hyper,
             boolean groundLaunch) {
         applyStepHeightBoost(player);
+        BoostStrikeSupport.onBoostStart(player);
 
         Vec3 existingVelocity = player.getDeltaMovement();
         boolean grantedNoGravity = !groundLaunch && !player.isNoGravity();
@@ -95,6 +97,8 @@ public final class BoosterMotionTicker {
 
     private static void stopBoost(ServerPlayer player, ActiveBoost boost) {
         removeStepHeightBoost(player);
+        // 破击宽限：结束后 1s 内仍算破击窗口，触及暂不立刻移除。
+        BoostStrikeSupport.onBoostEnd(player);
         if (boost.grantedNoGravity || boost.grantedApexNoGravity) {
             player.setNoGravity(false);
         }

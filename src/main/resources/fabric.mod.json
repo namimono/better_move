@@ -21,6 +21,7 @@
 		]
 	},
 	"mixins": [
+		"boostermod.mixins.json",
 		"boostermod.client.mixins.json"
 	],
 	"depends": {

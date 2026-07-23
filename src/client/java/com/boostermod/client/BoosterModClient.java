@@ -5,6 +5,7 @@ import com.boostermod.client.screen.BoosterUpgradeScreen;
 import com.boostermod.network.BoosterFeedbackPayload;
 import com.boostermod.network.BoosterHudStatePayload;
 import com.boostermod.network.BoosterShakeStatePayload;
+import com.boostermod.network.BoosterStrikeFeedbackPayload;
 import com.mojang.blaze3d.platform.InputConstants;
 import net.fabricmc.api.ClientModInitializer;
 import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents;
@@ -31,8 +32,15 @@ public class BoosterModClient implements ClientModInitializer {
                 "key.categories.boostermod"
         ));
 
+        BoostStrikeClientState.init();
+
         ClientPlayNetworking.registerGlobalReceiver(BoosterFeedbackPayload.TYPE, (payload, context) ->
-                context.client().execute(() -> BoosterFeedbackEffects.trigger(payload.hyper())));
+                context.client().execute(() -> {
+                    BoosterFeedbackEffects.trigger(payload.hyper());
+                    BoostStrikeClientState.onBoostFeedback();
+                }));
+        ClientPlayNetworking.registerGlobalReceiver(BoosterStrikeFeedbackPayload.TYPE, (payload, context) ->
+                context.client().execute(() -> BoosterStrikeFeedbackEffects.trigger(payload.kill())));
         ClientPlayNetworking.registerGlobalReceiver(BoosterHudStatePayload.TYPE, (payload, context) ->
                 context.client().execute(() -> BoosterHudState.setEnabled(payload.enabled())));
         ClientPlayNetworking.registerGlobalReceiver(BoosterShakeStatePayload.TYPE, (payload, context) ->
@@ -40,6 +48,7 @@ public class BoosterModClient implements ClientModInitializer {
         ClientPlayConnectionEvents.DISCONNECT.register((handler, client) -> {
             BoosterHudState.reset();
             BoosterShakeState.reset();
+            BoostStrikeClientState.reset();
         });
 
         HudRenderCallback.EVENT.register((drawContext, tickCounter) -> BoosterCooldownHud.render(drawContext));
@@ -49,11 +58,14 @@ public class BoosterModClient implements ClientModInitializer {
             if (player == null) {
                 BoosterInputHandler.reset();
                 BoosterReadySound.reset();
+                BoostStrikeClientState.reset();
                 return;
             }
 
             BoosterReadySound.tick(player);
             BoosterFeedbackEffects.tick();
+            BoosterStrikeFeedbackEffects.tick();
+            BoostStrikeClientState.tick();
             BoosterInputHandler.tick(player, boostKey);
         });
     }

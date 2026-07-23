@@ -1,5 +1,6 @@
 package com.boostermod;
 
+import com.boostermod.combat.BoostStrikeHandler;
 import com.boostermod.command.BoosterModCommand;
 import com.boostermod.feedback.BoosterShakeSettings;
 import com.boostermod.hud.BoosterHudSettings;
@@ -11,6 +12,7 @@ import com.boostermod.network.BoosterHudStatePayload;
 import com.boostermod.network.BoosterShakeStatePayload;
 import com.boostermod.network.BoosterRequestPayload;
 import com.boostermod.network.BoosterSteerPayload;
+import com.boostermod.network.BoosterStrikeFeedbackPayload;
 import com.boostermod.screen.BoosterUpgradeMenu;
 import com.boostermod.screen.BoosterUpgradeOpenData;
 import com.boostermod.tier.BoosterTier;
@@ -56,6 +58,8 @@ public class BoosterMod implements ModInitializer {
             registerUpgrade("no_cooldown_upgrade", BoosterUpgradeType.NO_COOLDOWN);
     public static final Item RANDOM_IMPULSE_UPGRADE =
             registerUpgrade("random_impulse_upgrade", BoosterUpgradeType.RANDOM_IMPULSE);
+    public static final Item BOOST_STRIKE_UPGRADE =
+            registerUpgrade("boost_strike_upgrade", BoosterUpgradeType.BOOST_STRIKE);
 
     public static final MenuType<BoosterUpgradeMenu> BOOSTER_UPGRADE_MENU = Registry.register(
             BuiltInRegistries.MENU,
@@ -86,6 +90,7 @@ public class BoosterMod implements ModInitializer {
                             output.accept(VERTICAL_LAUNCH_UPGRADE);
                             output.accept(NO_COOLDOWN_UPGRADE);
                             output.accept(RANDOM_IMPULSE_UPGRADE);
+                            output.accept(BOOST_STRIKE_UPGRADE);
                         })
                         .build()
         );
@@ -93,6 +98,7 @@ public class BoosterMod implements ModInitializer {
         PayloadTypeRegistry.playC2S().register(BoosterRequestPayload.TYPE, BoosterRequestPayload.CODEC);
         PayloadTypeRegistry.playC2S().register(BoosterSteerPayload.TYPE, BoosterSteerPayload.CODEC);
         PayloadTypeRegistry.playS2C().register(BoosterFeedbackPayload.TYPE, BoosterFeedbackPayload.CODEC);
+        PayloadTypeRegistry.playS2C().register(BoosterStrikeFeedbackPayload.TYPE, BoosterStrikeFeedbackPayload.CODEC);
         PayloadTypeRegistry.playS2C().register(BoosterHudStatePayload.TYPE, BoosterHudStatePayload.CODEC);
         PayloadTypeRegistry.playS2C().register(BoosterShakeStatePayload.TYPE, BoosterShakeStatePayload.CODEC);
 
@@ -118,7 +124,11 @@ public class BoosterMod implements ModInitializer {
 
         CommandRegistrationCallback.EVENT.register((dispatcher, registryAccess, environment) ->
                 BoosterModCommand.register(dispatcher));
-        ServerTickEvents.END_SERVER_TICK.register(BoosterLeggingsItem::tickActiveMotions);
+        ServerTickEvents.END_SERVER_TICK.register(server -> {
+            BoosterLeggingsItem.tickActiveMotions(server);
+            BoostStrikeHandler.tickServer(server);
+        });
+        BoostStrikeHandler.init();
 
         BoosterEquipment.initTrinketsCompat();
         if (BoosterEquipment.isTrinketsEnabled()) {
