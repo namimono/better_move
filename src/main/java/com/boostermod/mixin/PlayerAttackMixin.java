@@ -16,58 +16,87 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 
 /**
- * 推进破击：强制暴击、强制/扩大横扫；放宽实体交互距离校验（贴身 + 更长眼距）。
+ * 推进破击：窗口内满伤+必暴击、强制/扩大横扫；放宽实体交互距离校验。
  */
 @Mixin(Player.class)
 public abstract class PlayerAttackMixin {
-    /**
-     * 原版在算暴击前会 {@code resetAttackStrengthTicker()}，若此时再读 strength scale 恒为未充满。
-     * 因此在 reset 前缓存，供强制暴击判断「是否满蓄力」。
-     */
     @Unique
-    private static final ThreadLocal<Float> BOOSTERMOD$ATTACK_STRENGTH_BEFORE_RESET =
-            ThreadLocal.withInitial(() -> Float.NaN);
+    private boolean boostermod$spoofedForCrit;
+    @Unique
+    private boolean boostermod$savedSprinting;
+    @Unique
+    private boolean boostermod$savedOnGround;
+    @Unique
+    private float boostermod$savedFallDistance;
 
-    @Inject(method = "attack", at = @At("HEAD"))
-    private void boostermod$clearAttackStrengthCache(Entity target, CallbackInfo ci) {
-        BOOSTERMOD$ATTACK_STRENGTH_BEFORE_RESET.remove();
-    }
-
-    @Inject(
+    /**
+     * 破击窗口内：把攻击冷却视作充满，连点/推进瞬间也不会因半蓄力变成弱击。
+     * （原版只在 attack 开头读一次 scale，此处唯一调用点。）
+     */
+    @Redirect(
             method = "attack",
             at = @At(
                     value = "INVOKE",
-                    target = "Lnet/minecraft/world/entity/player/Player;resetAttackStrengthTicker()V"))
-    private void boostermod$cacheAttackStrengthBeforeReset(Entity target, CallbackInfo ci) {
-        Player self = (Player) (Object) this;
-        BOOSTERMOD$ATTACK_STRENGTH_BEFORE_RESET.set(self.getAttackStrengthScale(0.5f));
-    }
-
-    @Inject(method = "attack", at = @At("RETURN"))
-    private void boostermod$clearAttackStrengthCacheOnReturn(Entity target, CallbackInfo ci) {
-        BOOSTERMOD$ATTACK_STRENGTH_BEFORE_RESET.remove();
+                    target = "Lnet/minecraft/world/entity/player/Player;getAttackStrengthScale(F)F"))
+    private float boostermod$fullStrengthInStrikeWindow(Player player, float partialTicks) {
+        float scale = player.getAttackStrengthScale(partialTicks);
+        if (BoostStrikeSupport.shouldForceCritical(player)) {
+            return 1.0f;
+        }
+        return scale;
     }
 
     /**
-     * 局部变量 index 9 为 critical（1.21.1 Player.attack 字节码）。
-     * 破击窗口 + 攻击充满时强制暴击（×1.5 + 暴击音效/粒子），
-     * 不再依赖下落跳劈 / 非疾跑；推进推力期与结束后宽限期一致生效。
+     * 破击窗口内伪装原版暴击前置条件：离地、有下落距离、非疾跑。
+     * 推进推力期每 tick 会 resetFallDistance，仅改 critical 局部变量不够稳时，用此路径保证 ×1.5 与暴击特效。
+     */
+    @Inject(method = "attack", at = @At("HEAD"))
+    private void boostermod$spoofVanillaCritConditions(Entity target, CallbackInfo ci) {
+        boostermod$spoofedForCrit = false;
+        if (!(target instanceof LivingEntity)) {
+            return;
+        }
+        Player self = (Player) (Object) this;
+        if (!BoostStrikeSupport.shouldForceCritical(self)) {
+            return;
+        }
+
+        boostermod$savedSprinting = self.isSprinting();
+        boostermod$savedOnGround = self.onGround();
+        boostermod$savedFallDistance = self.fallDistance;
+
+        self.setSprinting(false);
+        self.setOnGround(false);
+        if (self.fallDistance <= 0.0f) {
+            self.fallDistance = 1.0f;
+        }
+        boostermod$spoofedForCrit = true;
+    }
+
+    @Inject(method = "attack", at = @At("RETURN"))
+    private void boostermod$restoreAfterCritSpoof(Entity target, CallbackInfo ci) {
+        if (!boostermod$spoofedForCrit) {
+            return;
+        }
+        Player self = (Player) (Object) this;
+        self.setSprinting(boostermod$savedSprinting);
+        self.setOnGround(boostermod$savedOnGround);
+        self.fallDistance = boostermod$savedFallDistance;
+        boostermod$spoofedForCrit = false;
+    }
+
+    /**
+     * 局部变量 index 9 为 critical（1.21.1）。双保险：即使伪装条件未生效也强制暴击标志。
      */
     @ModifyVariable(method = "attack", at = @At("STORE"), index = 9, ordinal = 0)
-    private boolean boostermod$forceCritical(boolean critical, Entity target) {
+    private boolean boostermod$forceCriticalFlag(boolean critical, Entity target) {
         if (critical) {
             return true;
         }
         if (!(target instanceof LivingEntity)) {
             return false;
         }
-        float strength = BOOSTERMOD$ATTACK_STRENGTH_BEFORE_RESET.get();
-        // 与原版一致：需攻击充满（>0.9）；NaN 表示未捕获到缓存，不强制。
-        if (Float.isNaN(strength) || strength <= 0.9f) {
-            return false;
-        }
-        Player self = (Player) (Object) this;
-        return BoostStrikeSupport.shouldForceCritical(self);
+        return BoostStrikeSupport.shouldForceCritical((Player) (Object) this);
     }
 
     /**

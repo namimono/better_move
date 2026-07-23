@@ -10,7 +10,7 @@ import net.minecraft.world.entity.player.Player;
  */
 public final class BoostStrikeClientState {
     /**
-     * 覆盖：推进推力（约 10 tick）+ 结束后破击宽限（20 tick = 1s）+ 余量。
+     * 覆盖：推进推力（约 10 tick）+ 结束后破击宽限 + 余量。
      * 与服务端 {@link com.boostermod.combat.BoostStrikeSupport#POST_BOOST_GRACE_TICKS} 对齐。
      */
     private static final int REACH_WINDOW_TICKS =
@@ -24,7 +24,17 @@ public final class BoostStrikeClientState {
         BoostStrikeSupport.BoostStrikeClientHooks.setPredicate(BoostStrikeClientState::isActiveFor);
     }
 
+    /** 客户端按下推进键时调用（早于服务端反馈），保证推进瞬间即可辅助锁定。 */
+    public static void onBoostRequest() {
+        openWindow();
+    }
+
+    /** 服务端推进反馈到达时刷新窗口时长（与 onBoostRequest 可叠加，取刷新）。 */
     public static void onBoostFeedback() {
+        openWindow();
+    }
+
+    private static void openWindow() {
         LocalPlayer player = Minecraft.getInstance().player;
         if (player == null || !BoostStrikeSupport.hasBoostStrikeUpgrade(player)) {
             return;

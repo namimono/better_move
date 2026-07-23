@@ -4,6 +4,7 @@ import com.boostermod.BoosterMod;
 import com.boostermod.balance.BoosterBalanceField;
 import com.boostermod.balance.BoosterBalanceManager;
 import com.boostermod.balance.BoosterBalanceProfile;
+import com.boostermod.combat.BoostStrikeHandler;
 import com.boostermod.feedback.BoosterShakeSettings;
 import com.boostermod.hud.BoosterHudSettings;
 import com.boostermod.tier.BoosterTier;
@@ -15,11 +16,14 @@ import com.mojang.brigadier.exceptions.CommandSyntaxException;
 import com.mojang.brigadier.exceptions.DynamicCommandExceptionType;
 import com.mojang.brigadier.suggestion.Suggestions;
 import com.mojang.brigadier.suggestion.SuggestionsBuilder;
+import java.util.Collection;
 import java.util.Locale;
 import java.util.concurrent.CompletableFuture;
 import net.minecraft.commands.CommandSourceStack;
 import net.minecraft.commands.Commands;
+import net.minecraft.commands.arguments.EntityArgument;
 import net.minecraft.network.chat.Component;
+import net.minecraft.server.level.ServerPlayer;
 
 public final class BoosterModCommand {
     private static final DynamicCommandExceptionType UNKNOWN_TIER =
@@ -46,6 +50,25 @@ public final class BoosterModCommand {
                                 .executes(context -> setShakeEnabled(context, true)))
                         .then(Commands.literal("off")
                                 .executes(context -> setShakeEnabled(context, false))))
+                .then(Commands.literal("strike")
+                        .then(Commands.literal("stack")
+                                .then(Commands.literal("status")
+                                        .executes(context -> strikeStackStatus(context, null))
+                                        .then(Commands.argument("targets", EntityArgument.players())
+                                                .executes(context -> strikeStackStatus(
+                                                        context, EntityArgument.getPlayers(context, "targets")))))
+                                .then(Commands.literal("lock")
+                                        .then(Commands.argument("value", DoubleArgumentType.doubleArg(0.0))
+                                                .executes(context -> strikeStackLock(context, null))
+                                                .then(Commands.argument("targets", EntityArgument.players())
+                                                        .executes(context -> strikeStackLock(
+                                                                context,
+                                                                EntityArgument.getPlayers(context, "targets"))))))
+                                .then(Commands.literal("unlock")
+                                        .executes(context -> strikeStackUnlock(context, null))
+                                        .then(Commands.argument("targets", EntityArgument.players())
+                                                .executes(context -> strikeStackUnlock(
+                                                        context, EntityArgument.getPlayers(context, "targets")))))))
                 .then(Commands.literal("balance")
                         .then(Commands.literal("show")
                                 .executes(BoosterModCommand::showAll)
@@ -158,6 +181,72 @@ public final class BoosterModCommand {
                                 + (changed ? "." : " (unchanged).")),
                 true);
         return 1;
+    }
+
+    private static int strikeStackStatus(
+            CommandContext<CommandSourceStack> context, Collection<ServerPlayer> targets)
+            throws CommandSyntaxException {
+        Collection<ServerPlayer> players = resolvePlayers(context, targets);
+        for (ServerPlayer player : players) {
+            double stack = BoostStrikeHandler.getStackAmount(player);
+            boolean locked = BoostStrikeHandler.isStackLocked(player);
+            context.getSource().sendSuccess(
+                    () -> Component.literal(
+                            player.getGameProfile().getName()
+                                    + " strike stack="
+                                    + format(stack)
+                                    + (locked ? " (locked)" : " (unlocked)")),
+                    false);
+        }
+        return players.size();
+    }
+
+    private static int strikeStackLock(
+            CommandContext<CommandSourceStack> context, Collection<ServerPlayer> targets)
+            throws CommandSyntaxException {
+        double value = DoubleArgumentType.getDouble(context, "value");
+        Collection<ServerPlayer> players = resolvePlayers(context, targets);
+        for (ServerPlayer player : players) {
+            BoostStrikeHandler.lockStack(player, value);
+            context.getSource().sendSuccess(
+                    () -> Component.literal(
+                            "Locked strike stack for "
+                                    + player.getGameProfile().getName()
+                                    + " at "
+                                    + format(value)
+                                    + " (holds until unlock)."),
+                    true);
+        }
+        return players.size();
+    }
+
+    private static int strikeStackUnlock(
+            CommandContext<CommandSourceStack> context, Collection<ServerPlayer> targets)
+            throws CommandSyntaxException {
+        Collection<ServerPlayer> players = resolvePlayers(context, targets);
+        for (ServerPlayer player : players) {
+            double before = BoostStrikeHandler.getStackAmount(player);
+            boolean wasLocked = BoostStrikeHandler.isStackLocked(player);
+            BoostStrikeHandler.unlockStack(player);
+            context.getSource().sendSuccess(
+                    () -> Component.literal(
+                            "Unlocked strike stack for "
+                                    + player.getGameProfile().getName()
+                                    + (wasLocked
+                                            ? " (was " + format(before) + ", now expires normally)."
+                                            : " (was not locked).")),
+                    true);
+        }
+        return players.size();
+    }
+
+    private static Collection<ServerPlayer> resolvePlayers(
+            CommandContext<CommandSourceStack> context, Collection<ServerPlayer> targets)
+            throws CommandSyntaxException {
+        if (targets != null) {
+            return targets;
+        }
+        return java.util.List.of(context.getSource().getPlayerOrException());
     }
 
     private static void sendProfile(CommandSourceStack source, BoosterTier tier, BoosterBalanceProfile profile) {

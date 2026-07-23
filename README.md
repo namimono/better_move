@@ -24,3 +24,8 @@ Minecraft 1.21.1 Fabric 模组。核心装备是可升级的推进器护腿，�
 - 运行客户端：`./gradlew runClient`
 
 项目基于 Java 21、Fabric Loom、Fabric API。当前没有自动化测试，主要依赖编译通过和进游戏手测。
+
+## 文档
+
+- [终端命令说明](docs/终端命令说明.md) — `/boostermod` 全部子命令（HUD / 震动 / 破击叠层 / 推进数值）
+- 其它设计与进度稿见 `docs/`

@@ -44,10 +44,10 @@ public final class BoostStrikeSupport {
     public static final double SWEEP_RANGE_SQR = 49.0;
     public static final double VANILLA_SWEEP_RANGE_SQR = 9.0;
     /**
-     * 推进结束后仍视为破击窗口的时长（20 tick = 1 秒）。
+     * 推进结束后仍视为破击窗口的时长（10 tick = 0.5 秒）。
      * 避免推力刚结束立刻挥砍算不上破击、叠层被「掐断」。
      */
-    public static final int POST_BOOST_GRACE_TICKS = 20;
+    public static final int POST_BOOST_GRACE_TICKS = 10;
 
     private static final ResourceLocation REACH_MODIFIER_ID =
             ResourceLocation.fromNamespaceAndPath(BoosterMod.MOD_ID, "boost_strike_reach");
@@ -141,11 +141,8 @@ public final class BoostStrikeSupport {
     }
 
     /**
-     * 破击窗口内应强制近战暴击（跳过下落/离地/非疾跑等原版条件）。
-     * <p>
-     * 注意：不可在 {@code Player.attack} 内再读 {@code getAttackStrengthScale}——
-     * 原版会先 {@code resetAttackStrengthTicker()} 再算暴击，读到的永远是未充满。
-     * 充满判定由 mixin 在 reset 前缓存。
+     * 破击窗口内强制近战「满蓄力 + 暴击」（跳过下落/离地/非疾跑，且连点不吃半蓄力惩罚）。
+     * 覆盖：推进推力全程 + 结束后 {@link #POST_BOOST_GRACE_TICKS} 宽限。
      */
     public static boolean shouldForceCritical(Player player) {
         return isBoostStrikeWindow(player);

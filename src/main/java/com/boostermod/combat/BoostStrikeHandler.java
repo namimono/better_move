@@ -44,6 +44,13 @@ public final class BoostStrikeHandler {
     /** 当前叠层攻击加成总量（与属性修饰同步）。 */
     private static final Map<UUID, Double> ATTACK_STACK = new ConcurrentHashMap<>();
     private static final Map<UUID, Long> ATTACK_BUFF_DEADLINE = new ConcurrentHashMap<>();
+    /**
+     * 调试锁定：叠层保持为指定值，不受命中叠层/到期清零影响，直到 unlock。
+     * value ≥ 0；锁定中 deadline 不生效。
+     */
+    private static final Map<UUID, Double> STACK_LOCK = new ConcurrentHashMap<>();
+    /** 锁定时 HUD 显示的「剩余」tick（仅展示用，服务端不按此到期）。 */
+    private static final int LOCKED_HUD_REMAINING_TICKS = 20 * 60 * 60;
     private static final ThreadLocal<Boolean> APPLYING_BONUS = ThreadLocal.withInitial(() -> Boolean.FALSE);
 
     private BoostStrikeHandler() {}
@@ -89,6 +96,16 @@ public final class BoostStrikeHandler {
         Iterator<Map.Entry<UUID, Long>> buffIt = ATTACK_BUFF_DEADLINE.entrySet().iterator();
         while (buffIt.hasNext()) {
             Map.Entry<UUID, Long> entry = buffIt.next();
+            if (STACK_LOCK.containsKey(entry.getKey())) {
+                // 锁定中：不到期；周期性刷新属性与 HUD
+                if (tick % 20 == 0) {
+                    ServerPlayer player = server.getPlayerList().getPlayer(entry.getKey());
+                    if (player != null) {
+                        reassertLockedStack(player);
+                    }
+                }
+                continue;
+            }
             if (tick < entry.getValue()) {
                 // 每 20 tick 心跳，防 HUD 丢包
                 if (tick % 20 == 0) {
@@ -108,6 +125,19 @@ public final class BoostStrikeHandler {
                 buffIt.remove();
             }
         }
+
+        // 仅有锁定、尚未写入 deadline 的兜底心跳
+        if (tick % 20 == 0) {
+            for (UUID id : STACK_LOCK.keySet()) {
+                if (ATTACK_BUFF_DEADLINE.containsKey(id)) {
+                    continue;
+                }
+                ServerPlayer player = server.getPlayerList().getPlayer(id);
+                if (player != null) {
+                    reassertLockedStack(player);
+                }
+            }
+        }
     }
 
     /** 玩家加入或需要纠正时下发当前叠层快照。 */
@@ -115,6 +145,54 @@ public final class BoostStrikeHandler {
         if (player != null) {
             syncStack(player);
         }
+    }
+
+    public static boolean isStackLocked(ServerPlayer player) {
+        return player != null && STACK_LOCK.containsKey(player.getUUID());
+    }
+
+    public static double getStackAmount(ServerPlayer player) {
+        if (player == null) {
+            return 0.0;
+        }
+        Double locked = STACK_LOCK.get(player.getUUID());
+        if (locked != null) {
+            return locked;
+        }
+        return ATTACK_STACK.getOrDefault(player.getUUID(), 0.0);
+    }
+
+    /**
+     * 将叠层锁定为 {@code amount}（≥0），不因命中/到期变化，直到 {@link #unlockStack}。
+     */
+    public static void lockStack(ServerPlayer player, double amount) {
+        if (player == null) {
+            return;
+        }
+        double clamped = Math.max(0.0, amount);
+        STACK_LOCK.put(player.getUUID(), clamped);
+        applyAbsoluteStack(player, clamped, /*locked*/ true);
+    }
+
+    /**
+     * 取消锁定。当前叠层保留并按命中时长起一个普通到期；若为 0 则清零。
+     */
+    public static void unlockStack(ServerPlayer player) {
+        if (player == null) {
+            return;
+        }
+        Double locked = STACK_LOCK.remove(player.getUUID());
+        double current = locked != null
+                ? locked
+                : ATTACK_STACK.getOrDefault(player.getUUID(), 0.0);
+        if (current <= 0.0) {
+            clearAttackStack(player);
+            return;
+        }
+        int duration = BoostStrikeProfile.forTier(resolveTier(player)).hitDurationTicks();
+        applyAbsoluteStack(player, current, /*locked*/ false);
+        ATTACK_BUFF_DEADLINE.put(player.getUUID(), player.server.getTickCount() + (long) duration);
+        syncStack(player);
     }
 
     private static void onAfterDamage(
@@ -254,6 +332,12 @@ public final class BoostStrikeHandler {
         if (delta <= 0.0 || durationTicks <= 0) {
             return;
         }
+        // 锁定中：保持锁定值，不因命中叠层变化
+        Double locked = STACK_LOCK.get(player.getUUID());
+        if (locked != null) {
+            reassertLockedStack(player);
+            return;
+        }
         AttributeInstance attr = player.getAttribute(Attributes.ATTACK_DAMAGE);
         if (attr == null) {
             return;
@@ -267,16 +351,10 @@ public final class BoostStrikeHandler {
         }
 
         double next = Math.min(maxStack, current + delta);
-        ATTACK_STACK.put(player.getUUID(), next);
-
-        attr.removeModifier(ATTACK_MODIFIER_ID);
+        applyAbsoluteStack(player, next, /*locked*/ false);
         if (next > 0.0) {
-            attr.addTransientModifier(new AttributeModifier(
-                    ATTACK_MODIFIER_ID, next, AttributeModifier.Operation.ADD_VALUE));
             long deadline = player.server.getTickCount() + (long) durationTicks;
             ATTACK_BUFF_DEADLINE.put(player.getUUID(), deadline);
-        } else {
-            ATTACK_BUFF_DEADLINE.remove(player.getUUID());
         }
         syncStack(player);
     }
@@ -286,6 +364,12 @@ public final class BoostStrikeHandler {
     }
 
     private static void clearAttackStack(Player player) {
+        if (STACK_LOCK.containsKey(player.getUUID())) {
+            if (player instanceof ServerPlayer serverPlayer) {
+                reassertLockedStack(serverPlayer);
+            }
+            return;
+        }
         ATTACK_STACK.remove(player.getUUID());
         ATTACK_BUFF_DEADLINE.remove(player.getUUID());
         AttributeInstance attr = player.getAttribute(Attributes.ATTACK_DAMAGE);
@@ -302,6 +386,7 @@ public final class BoostStrikeHandler {
         SETTLED.remove(playerId);
         ATTACK_BUFF_DEADLINE.remove(playerId);
         ATTACK_STACK.remove(playerId);
+        STACK_LOCK.remove(playerId);
         BoostStrikeSupport.clearGrace(playerId);
         if (player != null) {
             BoostStrikeSupport.removeReachBonus(player);
@@ -312,24 +397,74 @@ public final class BoostStrikeHandler {
         }
     }
 
+    private static void reassertLockedStack(ServerPlayer player) {
+        Double locked = STACK_LOCK.get(player.getUUID());
+        if (locked == null) {
+            return;
+        }
+        applyAbsoluteStack(player, locked, /*locked*/ true);
+        syncStack(player);
+    }
+
+    private static void applyAbsoluteStack(ServerPlayer player, double amount, boolean locked) {
+        AttributeInstance attr = player.getAttribute(Attributes.ATTACK_DAMAGE);
+        if (attr == null) {
+            return;
+        }
+        double next = Math.max(0.0, amount);
+        if (next > 0.0) {
+            ATTACK_STACK.put(player.getUUID(), next);
+        } else {
+            ATTACK_STACK.remove(player.getUUID());
+        }
+        attr.removeModifier(ATTACK_MODIFIER_ID);
+        if (next > 0.0) {
+            attr.addTransientModifier(new AttributeModifier(
+                    ATTACK_MODIFIER_ID, next, AttributeModifier.Operation.ADD_VALUE));
+            if (locked) {
+                // 远未来 deadline：tick 循环跳过到期；sync 用锁定 HUD 剩余
+                ATTACK_BUFF_DEADLINE.put(player.getUUID(), Long.MAX_VALUE / 4);
+            }
+        } else {
+            ATTACK_BUFF_DEADLINE.remove(player.getUUID());
+        }
+    }
+
+    private static BoosterTier resolveTier(ServerPlayer player) {
+        return BoosterEquipment.find(player)
+                .map(equipped -> equipped.item().getTier())
+                .orElse(BoosterTier.IRON);
+    }
+
     private static void syncStack(ServerPlayer player) {
-        double stack = ATTACK_STACK.getOrDefault(player.getUUID(), 0.0);
+        boolean locked = STACK_LOCK.containsKey(player.getUUID());
+        double stack = locked
+                ? STACK_LOCK.getOrDefault(player.getUUID(), 0.0)
+                : ATTACK_STACK.getOrDefault(player.getUUID(), 0.0);
         float maxStack = 0.0f;
         int remaining = 0;
-        if (stack > 0.0) {
+        if (stack > 0.0 || locked) {
             BoosterEquipment.Equipped equipped = BoosterEquipment.find(player).orElse(null);
             if (equipped != null) {
                 maxStack = (float) BoostStrikeProfile.forTier(equipped.item().getTier()).maxStackBonus();
             } else {
                 maxStack = (float) Math.max(stack, 1.0);
             }
-            Long deadline = ATTACK_BUFF_DEADLINE.get(player.getUUID());
-            if (deadline != null) {
-                remaining = (int) Math.max(0L, deadline - player.server.getTickCount());
+            // 锁定时可超过品质上限（调试用），HUD 至少显示满轨比例不炸
+            if (maxStack > 0.0f && stack > maxStack) {
+                maxStack = (float) stack;
             }
-            if (remaining <= 0) {
-                stack = 0.0;
-                maxStack = 0.0f;
+            if (locked) {
+                remaining = LOCKED_HUD_REMAINING_TICKS;
+            } else {
+                Long deadline = ATTACK_BUFF_DEADLINE.get(player.getUUID());
+                if (deadline != null) {
+                    remaining = (int) Math.max(0L, Math.min(Integer.MAX_VALUE, deadline - player.server.getTickCount()));
+                }
+                if (remaining <= 0) {
+                    stack = 0.0;
+                    maxStack = 0.0f;
+                }
             }
         }
         ServerPlayNetworking.send(

@@ -26,18 +26,25 @@ final class BoosterInputHandler {
         lastSentForward = 0.0f;
     }
 
-    static void tick(LocalPlayer player, KeyMapping boostKey) {
-        trackHyperWindows(player);
-
+    /**
+     * 必须在 START_CLIENT_TICK 处理推进键：同帧左键攻击在 tick 中段发包，
+     * 若推进放在 END，服务端会先收到攻击再收到推进，破击窗口未开、首刀无法必暴。
+     */
+    static void tickBoostKey(LocalPlayer player, KeyMapping boostKey) {
         while (boostKey.consumeClick()) {
             double[] boostDirection = horizontalInputVector(player);
+            // 立刻开客户端破击窗口（触及/辅助锁定），不等 S2C。
+            BoostStrikeClientState.onBoostRequest();
             ClientPlayNetworking.send(new BoosterRequestPayload(
                     boostDirection[0],
                     boostDirection[1],
                     -1,
                     landingTicksAgoForPayload()));
         }
+    }
 
+    static void tickEnd(LocalPlayer player) {
+        trackHyperWindows(player);
         syncSteerInput(player);
     }
 

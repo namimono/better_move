@@ -58,6 +58,15 @@ public class BoosterModClient implements ClientModInitializer {
 
         HudRenderCallback.EVENT.register((drawContext, tickCounter) -> BoosterCooldownHud.render(drawContext));
 
+        // 推进键必须在 tick 前半处理，保证同帧攻击包晚于推进包到达服务端。
+        ClientTickEvents.START_CLIENT_TICK.register(client -> {
+            LocalPlayer player = client.player;
+            if (player == null) {
+                return;
+            }
+            BoosterInputHandler.tickBoostKey(player, boostKey);
+        });
+
         ClientTickEvents.END_CLIENT_TICK.register(client -> {
             LocalPlayer player = client.player;
             if (player == null) {
@@ -73,7 +82,7 @@ public class BoosterModClient implements ClientModInitializer {
             BoosterStrikeFeedbackEffects.tick();
             BoostStrikeClientState.tick();
             BoostStrikeStackState.tick();
-            BoosterInputHandler.tick(player, boostKey);
+            BoosterInputHandler.tickEnd(player);
         });
     }
 }
