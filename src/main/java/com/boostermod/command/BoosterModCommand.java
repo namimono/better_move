@@ -4,8 +4,6 @@ import com.boostermod.BoosterMod;
 import com.boostermod.balance.BoosterBalanceField;
 import com.boostermod.balance.BoosterBalanceManager;
 import com.boostermod.balance.BoosterBalanceProfile;
-import com.boostermod.feature.BoosterFeature;
-import com.boostermod.feature.BoosterFeatureSettings;
 import com.boostermod.feedback.BoosterShakeSettings;
 import com.boostermod.hud.BoosterHudSettings;
 import com.boostermod.tier.BoosterTier;
@@ -28,8 +26,6 @@ public final class BoosterModCommand {
             new DynamicCommandExceptionType(value -> Component.literal("Unknown booster tier: " + value));
     private static final DynamicCommandExceptionType UNKNOWN_FIELD =
             new DynamicCommandExceptionType(value -> Component.literal("Unknown balance field: " + value));
-    private static final DynamicCommandExceptionType UNKNOWN_FEATURE =
-            new DynamicCommandExceptionType(value -> Component.literal("Unknown booster feature: " + value));
 
     private BoosterModCommand() {}
 
@@ -50,15 +46,6 @@ public final class BoosterModCommand {
                                 .executes(context -> setShakeEnabled(context, true)))
                         .then(Commands.literal("off")
                                 .executes(context -> setShakeEnabled(context, false))))
-                .then(Commands.literal("feature")
-                        .then(Commands.literal("show")
-                                .executes(BoosterModCommand::showFeatures))
-                        .then(Commands.argument("feature", StringArgumentType.word())
-                                .suggests(BoosterModCommand::suggestFeatures)
-                                .then(Commands.literal("on")
-                                        .executes(context -> setFeatureEnabled(context, readFeature(context), true)))
-                                .then(Commands.literal("off")
-                                        .executes(context -> setFeatureEnabled(context, readFeature(context), false)))))
                 .then(Commands.literal("balance")
                         .then(Commands.literal("show")
                                 .executes(BoosterModCommand::showAll)
@@ -132,31 +119,6 @@ public final class BoosterModCommand {
         return 1;
     }
 
-    private static int showFeatures(CommandContext<CommandSourceStack> context) {
-        BoosterFeatureSettings settings = BoosterFeatureSettings.get(context.getSource().getServer());
-        for (BoosterFeature feature : BoosterFeature.values()) {
-            sendFeature(context.getSource(), feature, settings.isEnabled(feature));
-        }
-        return 1;
-    }
-
-    private static int setFeatureEnabled(
-            CommandContext<CommandSourceStack> context,
-            BoosterFeature feature,
-            boolean enabled) {
-        BoosterFeatureSettings settings = BoosterFeatureSettings.get(context.getSource().getServer());
-        boolean changed = settings.setEnabled(feature, enabled);
-        context.getSource().sendSuccess(
-                () -> Component.literal(
-                        "Booster feature "
-                                + feature.getId()
-                                + " "
-                                + (enabled ? "enabled" : "disabled")
-                                + (changed ? "." : " (unchanged).")),
-                true);
-        return 1;
-    }
-
     private static int hudStatus(CommandContext<CommandSourceStack> context) {
         boolean enabled = BoosterHudSettings.get(context.getSource().getServer()).isEnabled();
         context.getSource().sendSuccess(
@@ -208,12 +170,6 @@ public final class BoosterModCommand {
                 false);
     }
 
-    private static void sendFeature(CommandSourceStack source, BoosterFeature feature, boolean enabled) {
-        source.sendSuccess(
-                () -> Component.literal(feature.getId() + " => " + (enabled ? "enabled" : "disabled")),
-                false);
-    }
-
     private static BoosterTier readTier(CommandContext<CommandSourceStack> context) throws CommandSyntaxException {
         String raw = StringArgumentType.getString(context, "tier");
         try {
@@ -232,15 +188,6 @@ public final class BoosterModCommand {
         return field;
     }
 
-    private static BoosterFeature readFeature(CommandContext<CommandSourceStack> context) throws CommandSyntaxException {
-        String raw = StringArgumentType.getString(context, "feature");
-        BoosterFeature feature = BoosterFeature.byId(raw);
-        if (feature == null) {
-            throw UNKNOWN_FEATURE.create(raw);
-        }
-        return feature;
-    }
-
     private static CompletableFuture<Suggestions> suggestTiers(
             CommandContext<CommandSourceStack> context,
             SuggestionsBuilder builder) {
@@ -255,15 +202,6 @@ public final class BoosterModCommand {
             SuggestionsBuilder builder) {
         for (BoosterBalanceField field : BoosterBalanceField.values()) {
             builder.suggest(field.getId());
-        }
-        return builder.buildFuture();
-    }
-
-    private static CompletableFuture<Suggestions> suggestFeatures(
-            CommandContext<CommandSourceStack> context,
-            SuggestionsBuilder builder) {
-        for (BoosterFeature feature : BoosterFeature.values()) {
-            builder.suggest(feature.getId());
         }
         return builder.buildFuture();
     }

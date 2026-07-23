@@ -1,0 +1,23 @@
+{
+  "type": "minecraft:crafting_shaped",
+  "pattern": [
+    " P ",
+    "PGP",
+    " R "
+  ],
+  "key": {
+    "P": {
+      "item": "minecraft:gunpowder"
+    },
+    "G": {
+      "item": "minecraft:iron_pickaxe"
+    },
+    "R": {
+      "item": "minecraft:redstone"
+    }
+  },
+  "result": {
+    "id": "boostermod:burrow_upgrade",
+    "count": 1
+  }
+}

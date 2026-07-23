@@ -3,6 +3,7 @@ package com.boostermod.screen;
 import com.boostermod.BoosterMod;
 import com.boostermod.item.BoosterLeggingsItem;
 import com.boostermod.upgrade.BoosterUpgradeHelper;
+import com.boostermod.upgrade.BoosterUpgradeItem;
 import net.minecraft.world.InteractionHand;
 import net.minecraft.world.SimpleContainer;
 import net.minecraft.world.entity.player.Inventory;
@@ -123,7 +124,16 @@ public class BoosterUpgradeMenu extends AbstractContainerMenu {
     }
 
     private void save(Player player) {
-        if (!player.level().isClientSide) {
+        if (player.level().isClientSide) {
+            return;
+        }
+        ItemStack target = player.getItemInHand(hand);
+        if (target.getItem() instanceof BoosterLeggingsItem) {
+            BoosterUpgradeHelper.saveContainer(target, upgrades, activeSlots, player.registryAccess());
+            return;
+        }
+        // Hand changed but we still hold a live reference to the upgraded stack (e.g. just equipped).
+        if (boosterStack.getItem() instanceof BoosterLeggingsItem) {
             BoosterUpgradeHelper.saveContainer(boosterStack, upgrades, activeSlots, player.registryAccess());
         }
     }
@@ -137,8 +147,23 @@ public class BoosterUpgradeMenu extends AbstractContainerMenu {
         }
 
         @Override
+        public void setChanged() {
+            super.setChanged();
+            save(playerInventory.player);
+        }
+
+        @Override
         public boolean mayPlace(ItemStack stack) {
-            return isActive() && BoosterUpgradeHelper.isUpgrade(stack);
+            if (!isActive() || !(stack.getItem() instanceof BoosterUpgradeItem upgradeItem)) {
+                return false;
+            }
+            // Allow replacing the same slot's current item of the same type.
+            ItemStack current = getItem();
+            if (current.getItem() instanceof BoosterUpgradeItem currentUpgrade
+                    && currentUpgrade.getUpgradeType() == upgradeItem.getUpgradeType()) {
+                return true;
+            }
+            return !BoosterUpgradeHelper.containsUpgradeType(upgrades, upgradeItem.getUpgradeType(), activeSlots);
         }
 
         @Override

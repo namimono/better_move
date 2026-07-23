@@ -2,8 +2,6 @@ package com.boostermod.item;
 
 import com.boostermod.balance.BoosterBalanceManager;
 import com.boostermod.balance.BoosterBalanceProfile;
-import com.boostermod.feature.BoosterFeature;
-import com.boostermod.feature.BoosterFeatureSettings;
 import com.boostermod.network.BoosterFeedbackPayload;
 import com.boostermod.screen.BoosterUpgradeMenuProvider;
 import com.boostermod.tier.BoosterTier;
@@ -12,10 +10,12 @@ import com.boostermod.upgrade.BoosterUpgradeType;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.ThreadLocalRandom;
+import net.minecraft.ChatFormatting;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Holder;
 import net.minecraft.core.particles.ParticleTypes;
 import net.fabricmc.fabric.api.networking.v1.ServerPlayNetworking;
+import net.minecraft.network.chat.Component;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
@@ -29,6 +29,7 @@ import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.item.Equipable;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.item.TooltipFlag;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.phys.AABB;
@@ -47,6 +48,8 @@ public class BoosterLeggingsItem extends Item implements Equipable {
     private static final double PROBE_STEP_UP_GRAIN = 0.05;
     private static final int MIN_FOOD_LEVEL = 6;
     private static final int BURROW_DEPTH_BLOCKS = 6;
+    /** 大致朝下才遁地；越大越不容易误触（90° 为竖直向下）。 */
+    private static final float BURROW_LOOK_DOWN_PITCH_DEG = 60.0f;
     private static final double RANDOM_IMPULSE_MIN = 0.1;
     private static final double RANDOM_IMPULSE_MAX = 1.0;
     private static final double BOX_EDGE_EPSILON = 1.0e-7;
@@ -89,6 +92,27 @@ public class BoosterLeggingsItem extends Item implements Equipable {
         return InteractionResultHolder.sidedSuccess(stack, level.isClientSide);
     }
 
+    @Override
+    public void appendHoverText(ItemStack stack, TooltipContext context, List<Component> tooltip, TooltipFlag flag) {
+        var registries = context.registries();
+        if (registries == null) {
+            return;
+        }
+        List<BoosterUpgradeType> types = BoosterUpgradeHelper.listUpgradeTypes(stack, registries);
+        if (types.isEmpty()) {
+            tooltip.add(Component.translatable("item.boostermod.booster_leggings.no_upgrades")
+                    .withStyle(ChatFormatting.DARK_GRAY));
+            return;
+        }
+        tooltip.add(Component.translatable("item.boostermod.booster_leggings.upgrades_header")
+                .withStyle(ChatFormatting.GRAY));
+        for (BoosterUpgradeType type : types) {
+            tooltip.add(Component.literal(" - ")
+                    .append(Component.translatable("item.boostermod." + type.getItemId()))
+                    .withStyle(ChatFormatting.AQUA));
+        }
+    }
+
     public static void tryBoostFromKey(
             ServerPlayer player,
             double clientDirX,
@@ -105,8 +129,9 @@ public class BoosterLeggingsItem extends Item implements Equipable {
             return;
         }
 
-        BoosterFeatureSettings features = BoosterFeatureSettings.get(player.server);
-        boolean noCooldown = features.isEnabled(BoosterFeature.NO_COOLDOWN);
+        var registries = player.registryAccess();
+        boolean noCooldown = BoosterUpgradeHelper.hasUpgrade(
+                boosterStack, BoosterUpgradeType.NO_COOLDOWN, registries);
         if (!noCooldown && player.getCooldowns().isOnCooldown(boosterItem)) {
             return;
         }
@@ -118,11 +143,13 @@ public class BoosterLeggingsItem extends Item implements Equipable {
         ServerLevel level = player.serverLevel();
         boolean groundLaunch = player.onGround();
         if (!groundLaunch && !BoosterUpgradeHelper.hasUpgrade(
-                boosterStack, BoosterUpgradeType.AIR_DASH, player.registryAccess())) {
+                boosterStack, BoosterUpgradeType.AIR_DASH, registries)) {
             return;
         }
 
-        if (features.isEnabled(BoosterFeature.BURROW)) {
+        boolean burrowUpgrade = BoosterUpgradeHelper.hasUpgrade(
+                boosterStack, BoosterUpgradeType.BURROW, registries);
+        if (burrowUpgrade && isLookingRoughlyDown(player)) {
             if (!boosterItem.applyBurrow(level, player, equipped)) {
                 return;
             }
@@ -134,7 +161,8 @@ public class BoosterLeggingsItem extends Item implements Equipable {
             return;
         }
 
-        Vec3 direction = features.isEnabled(BoosterFeature.VERTICAL_LAUNCH)
+        Vec3 direction = BoosterUpgradeHelper.hasUpgrade(
+                boosterStack, BoosterUpgradeType.VERTICAL_LAUNCH, registries)
                 ? VERTICAL_LAUNCH_DIRECTION
                 : boosterItem.resolveBoostDirection(level, player, groundLaunch);
         if (direction == null) {
@@ -142,6 +170,8 @@ public class BoosterLeggingsItem extends Item implements Equipable {
         }
 
         boolean hyper = isHyperBoost(player, jumpTicksAgo, landingTicksAgo);
+        boolean randomImpulse = BoosterUpgradeHelper.hasUpgrade(
+                boosterStack, BoosterUpgradeType.RANDOM_IMPULSE, registries);
         boosterItem.applyBoost(
                 level,
                 player,
@@ -149,12 +179,16 @@ public class BoosterLeggingsItem extends Item implements Equipable {
                 direction,
                 hyper,
                 groundLaunch,
-                features.isEnabled(BoosterFeature.RANDOM_IMPULSE));
+                randomImpulse);
         ServerPlayNetworking.send(player, new BoosterFeedbackPayload(hyper));
         if (!noCooldown) {
             player.getCooldowns().addCooldown(boosterItem, COOLDOWN_TICKS);
         }
         player.swing(InteractionHand.MAIN_HAND, true);
+    }
+
+    private static boolean isLookingRoughlyDown(Player player) {
+        return player.getXRot() >= BURROW_LOOK_DOWN_PITCH_DEG;
     }
 
     private static boolean isHyperBoost(ServerPlayer player, int jumpTicksAgo, int landingTicksAgo) {

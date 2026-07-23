@@ -49,6 +49,13 @@ public class BoosterMod implements ModInitializer {
     public static final Item BOOSTER_LEGGINGS_DIAMOND = registerBoosterLeggings(BoosterTier.DIAMOND);
     public static final Item BOOSTER_LEGGINGS_NETHERITE = registerBoosterLeggings(BoosterTier.NETHERITE);
     public static final Item AIR_DASH_UPGRADE = registerUpgrade("air_dash_upgrade", BoosterUpgradeType.AIR_DASH);
+    public static final Item BURROW_UPGRADE = registerUpgrade("burrow_upgrade", BoosterUpgradeType.BURROW);
+    public static final Item VERTICAL_LAUNCH_UPGRADE =
+            registerUpgrade("vertical_launch_upgrade", BoosterUpgradeType.VERTICAL_LAUNCH);
+    public static final Item NO_COOLDOWN_UPGRADE =
+            registerUpgrade("no_cooldown_upgrade", BoosterUpgradeType.NO_COOLDOWN);
+    public static final Item RANDOM_IMPULSE_UPGRADE =
+            registerUpgrade("random_impulse_upgrade", BoosterUpgradeType.RANDOM_IMPULSE);
 
     public static final MenuType<BoosterUpgradeMenu> BOOSTER_UPGRADE_MENU = Registry.register(
             BuiltInRegistries.MENU,
@@ -75,6 +82,10 @@ public class BoosterMod implements ModInitializer {
                             output.accept(BOOSTER_LEGGINGS_DIAMOND);
                             output.accept(BOOSTER_LEGGINGS_NETHERITE);
                             output.accept(AIR_DASH_UPGRADE);
+                            output.accept(BURROW_UPGRADE);
+                            output.accept(VERTICAL_LAUNCH_UPGRADE);
+                            output.accept(NO_COOLDOWN_UPGRADE);
+                            output.accept(RANDOM_IMPULSE_UPGRADE);
                         })
                         .build()
         );

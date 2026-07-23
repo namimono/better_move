@@ -1,0 +1,23 @@
+{
+  "type": "minecraft:crafting_shaped",
+  "pattern": [
+    " S ",
+    "SCS",
+    " R "
+  ],
+  "key": {
+    "S": {
+      "item": "minecraft:sugar"
+    },
+    "C": {
+      "item": "minecraft:clock"
+    },
+    "R": {
+      "item": "minecraft:redstone_block"
+    }
+  },
+  "result": {
+    "id": "boostermod:no_cooldown_upgrade",
+    "count": 1
+  }
+}

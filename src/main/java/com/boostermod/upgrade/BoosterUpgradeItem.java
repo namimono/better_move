@@ -20,8 +20,13 @@ public class BoosterUpgradeItem extends Item {
     }
 
     @Override
+    public boolean isFoil(ItemStack stack) {
+        // Temporary enchanted-book style UI; not an actual enchantment.
+        return true;
+    }
+
+    @Override
     public void appendHoverText(ItemStack stack, TooltipContext context, List<Component> tooltip, TooltipFlag flag) {
-        tooltip.add(Component.translatable("item.boostermod.air_dash_upgrade.tooltip")
-                .withStyle(ChatFormatting.GRAY));
+        tooltip.add(Component.translatable(type.getTooltipKey()).withStyle(ChatFormatting.GRAY));
     }
 }
