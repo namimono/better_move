@@ -18,7 +18,7 @@
 	"item.boostermod.random_impulse_upgrade": "Random Impulse Upgrade",
 	"item.boostermod.random_impulse_upgrade.tooltip": "Randomizes boost impulse each time (does not affect burrow).",
 	"item.boostermod.boost_strike_upgrade": "Boost Strike Upgrade",
-	"item.boostermod.boost_strike_upgrade.tooltip": "During boost and ~1s after: long reach and sticky targeting; swords wide-sweep. Hits stack attack power; kills stack more and reset booster cooldown (capped; clears when the buff expires). Boosting alone does not damage entities.",
+	"item.boostermod.boost_strike_upgrade.tooltip": "During boost and ~1s after: long reach and sticky targeting; fully charged hits always crit; swords wide-sweep. Hits stack attack power; kills stack more and reset booster cooldown (capped; clears when the buff expires). Boosting alone does not damage entities.",
 	"item.boostermod.booster_leggings.no_upgrades": "No upgrades installed",
 	"item.boostermod.booster_leggings.upgrades_header": "Installed upgrades:",
 	"container.boostermod.booster_upgrade": "Booster Upgrades",

@@ -18,7 +18,7 @@
 	"item.boostermod.random_impulse_upgrade": "随机推进升级项",
 	"item.boostermod.random_impulse_upgrade.tooltip": "每次推进随机冲量（不影响遁地深度）。",
 	"item.boostermod.boost_strike_upgrade": "推进破击升级项",
-	"item.boostermod.boost_strike_upgrade.tooltip": "推进中及结束后约1秒内：加长攻击距离，贴身/准星附近更易锁定；持剑默认大范围横扫。命中可叠层提升攻击力，击杀叠更多并重置推进冷却（有上限，到期清零）。碰撞不会自动伤人。",
+	"item.boostermod.boost_strike_upgrade.tooltip": "推进中及结束后约1秒内：加长攻击距离，贴身/准星附近更易锁定；攻击充满时必暴击；持剑默认大范围横扫。命中可叠层提升攻击力，击杀叠更多并重置推进冷却（有上限，到期清零）。碰撞不会自动伤人。",
 	"item.boostermod.booster_leggings.no_upgrades": "未安装升级项",
 	"item.boostermod.booster_leggings.upgrades_header": "已安装升级：",
 	"container.boostermod.booster_upgrade": "推进器升级",

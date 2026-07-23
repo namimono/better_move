@@ -6,6 +6,7 @@ import com.boostermod.network.BoosterFeedbackPayload;
 import com.boostermod.network.BoosterHudStatePayload;
 import com.boostermod.network.BoosterShakeStatePayload;
 import com.boostermod.network.BoosterStrikeFeedbackPayload;
+import com.boostermod.network.BoosterStrikeStackPayload;
 import com.mojang.blaze3d.platform.InputConstants;
 import net.fabricmc.api.ClientModInitializer;
 import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents;
@@ -41,6 +42,9 @@ public class BoosterModClient implements ClientModInitializer {
                 }));
         ClientPlayNetworking.registerGlobalReceiver(BoosterStrikeFeedbackPayload.TYPE, (payload, context) ->
                 context.client().execute(() -> BoosterStrikeFeedbackEffects.trigger(payload.kill())));
+        ClientPlayNetworking.registerGlobalReceiver(BoosterStrikeStackPayload.TYPE, (payload, context) ->
+                context.client().execute(() -> BoostStrikeStackState.apply(
+                        payload.stackAmount(), payload.maxStack(), payload.remainingTicks())));
         ClientPlayNetworking.registerGlobalReceiver(BoosterHudStatePayload.TYPE, (payload, context) ->
                 context.client().execute(() -> BoosterHudState.setEnabled(payload.enabled())));
         ClientPlayNetworking.registerGlobalReceiver(BoosterShakeStatePayload.TYPE, (payload, context) ->
@@ -49,6 +53,7 @@ public class BoosterModClient implements ClientModInitializer {
             BoosterHudState.reset();
             BoosterShakeState.reset();
             BoostStrikeClientState.reset();
+            BoostStrikeStackState.reset();
         });
 
         HudRenderCallback.EVENT.register((drawContext, tickCounter) -> BoosterCooldownHud.render(drawContext));
@@ -59,6 +64,7 @@ public class BoosterModClient implements ClientModInitializer {
                 BoosterInputHandler.reset();
                 BoosterReadySound.reset();
                 BoostStrikeClientState.reset();
+                BoostStrikeStackState.reset();
                 return;
             }
 
@@ -66,6 +72,7 @@ public class BoosterModClient implements ClientModInitializer {
             BoosterFeedbackEffects.tick();
             BoosterStrikeFeedbackEffects.tick();
             BoostStrikeClientState.tick();
+            BoostStrikeStackState.tick();
             BoosterInputHandler.tick(player, boostKey);
         });
     }

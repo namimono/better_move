@@ -1,7 +1,7 @@
 package com.boostermod.client;
 
+import com.boostermod.combat.BoostStrikeSupport;
 import com.boostermod.item.BoosterEquipment;
-import com.boostermod.item.BoosterLeggingsItem;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.player.LocalPlayer;
@@ -32,8 +32,22 @@ final class BoosterCooldownHud {
             return;
         }
 
+        boolean showStack = BoostStrikeSupport.hasBoostStrikeUpgrade(player);
+        if (!showStack && BoostStrikeStackState.hasActiveStack()) {
+            // 卸下破击后不占叠层轨，并清本地快照
+            BoostStrikeStackState.reset();
+        }
+
         float charge = ready ? 1.0f : 1.0f - cooldownRemaining;
-        BoosterHudRenderer.render(drawContext, charge, ready, durabilityPercent(legs), player.tickCount);
+        BoosterHudRenderer.render(
+                drawContext,
+                charge,
+                ready,
+                durabilityPercent(legs),
+                player.tickCount,
+                showStack,
+                showStack ? BoostStrikeStackState.stackRatio() : 0.0f,
+                showStack ? BoostStrikeStackState.timeRatio() : 0.0f);
     }
 
     private static float durabilityPercent(ItemStack stack) {

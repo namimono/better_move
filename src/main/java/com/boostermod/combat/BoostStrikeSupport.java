@@ -140,6 +140,17 @@ public final class BoostStrikeSupport {
         return main.getItem() instanceof SwordItem;
     }
 
+    /**
+     * 破击窗口内应强制近战暴击（跳过下落/离地/非疾跑等原版条件）。
+     * <p>
+     * 注意：不可在 {@code Player.attack} 内再读 {@code getAttackStrengthScale}——
+     * 原版会先 {@code resetAttackStrengthTicker()} 再算暴击，读到的永远是未充满。
+     * 充满判定由 mixin 在 reset 前缓存。
+     */
+    public static boolean shouldForceCritical(Player player) {
+        return isBoostStrikeWindow(player);
+    }
+
     public static void applyReachBonus(Player player) {
         AttributeInstance attr = player.getAttribute(Attributes.ENTITY_INTERACTION_RANGE);
         if (attr == null || attr.getModifier(REACH_MODIFIER_ID) != null) {

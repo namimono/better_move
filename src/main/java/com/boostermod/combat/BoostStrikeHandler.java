@@ -4,6 +4,7 @@ import com.boostermod.BoosterMod;
 import com.boostermod.item.BoosterEquipment;
 import com.boostermod.item.BoosterLeggingsItem;
 import com.boostermod.network.BoosterStrikeFeedbackPayload;
+import com.boostermod.network.BoosterStrikeStackPayload;
 import com.boostermod.tier.BoosterTier;
 import com.boostermod.upgrade.BoosterUpgradeHelper;
 import com.boostermod.upgrade.BoosterUpgradeType;
@@ -89,15 +90,30 @@ public final class BoostStrikeHandler {
         while (buffIt.hasNext()) {
             Map.Entry<UUID, Long> entry = buffIt.next();
             if (tick < entry.getValue()) {
+                // 每 20 tick 心跳，防 HUD 丢包
+                if (tick % 20 == 0) {
+                    ServerPlayer player = server.getPlayerList().getPlayer(entry.getKey());
+                    if (player != null) {
+                        syncStack(player);
+                    }
+                }
                 continue;
             }
             ServerPlayer player = server.getPlayerList().getPlayer(entry.getKey());
             if (player != null) {
+                // clearAttackStack 会从 ATTACK_BUFF_DEADLINE 移除当前项并 sync
                 clearAttackStack(player);
             } else {
                 ATTACK_STACK.remove(entry.getKey());
+                buffIt.remove();
             }
-            buffIt.remove();
+        }
+    }
+
+    /** 玩家加入或需要纠正时下发当前叠层快照。 */
+    public static void syncStackToPlayer(ServerPlayer player) {
+        if (player != null) {
+            syncStack(player);
         }
     }
 
@@ -262,6 +278,7 @@ public final class BoostStrikeHandler {
         } else {
             ATTACK_BUFF_DEADLINE.remove(player.getUUID());
         }
+        syncStack(player);
     }
 
     private static void resetBoosterCooldown(ServerPlayer player, BoosterLeggingsItem boosterItem) {
@@ -274,6 +291,9 @@ public final class BoostStrikeHandler {
         AttributeInstance attr = player.getAttribute(Attributes.ATTACK_DAMAGE);
         if (attr != null) {
             attr.removeModifier(ATTACK_MODIFIER_ID);
+        }
+        if (player instanceof ServerPlayer serverPlayer) {
+            syncStack(serverPlayer);
         }
     }
 
@@ -290,6 +310,31 @@ public final class BoostStrikeHandler {
                 attr.removeModifier(ATTACK_MODIFIER_ID);
             }
         }
+    }
+
+    private static void syncStack(ServerPlayer player) {
+        double stack = ATTACK_STACK.getOrDefault(player.getUUID(), 0.0);
+        float maxStack = 0.0f;
+        int remaining = 0;
+        if (stack > 0.0) {
+            BoosterEquipment.Equipped equipped = BoosterEquipment.find(player).orElse(null);
+            if (equipped != null) {
+                maxStack = (float) BoostStrikeProfile.forTier(equipped.item().getTier()).maxStackBonus();
+            } else {
+                maxStack = (float) Math.max(stack, 1.0);
+            }
+            Long deadline = ATTACK_BUFF_DEADLINE.get(player.getUUID());
+            if (deadline != null) {
+                remaining = (int) Math.max(0L, deadline - player.server.getTickCount());
+            }
+            if (remaining <= 0) {
+                stack = 0.0;
+                maxStack = 0.0f;
+            }
+        }
+        ServerPlayNetworking.send(
+                player,
+                new BoosterStrikeStackPayload((float) stack, maxStack, remaining));
     }
 
     private record PrimaryAttack(UUID targetId, int tick, BoosterTier tier, BoosterLeggingsItem boosterItem) {}

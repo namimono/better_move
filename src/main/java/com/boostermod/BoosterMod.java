@@ -13,6 +13,7 @@ import com.boostermod.network.BoosterShakeStatePayload;
 import com.boostermod.network.BoosterRequestPayload;
 import com.boostermod.network.BoosterSteerPayload;
 import com.boostermod.network.BoosterStrikeFeedbackPayload;
+import com.boostermod.network.BoosterStrikeStackPayload;
 import com.boostermod.screen.BoosterUpgradeMenu;
 import com.boostermod.screen.BoosterUpgradeOpenData;
 import com.boostermod.tier.BoosterTier;
@@ -99,6 +100,7 @@ public class BoosterMod implements ModInitializer {
         PayloadTypeRegistry.playC2S().register(BoosterSteerPayload.TYPE, BoosterSteerPayload.CODEC);
         PayloadTypeRegistry.playS2C().register(BoosterFeedbackPayload.TYPE, BoosterFeedbackPayload.CODEC);
         PayloadTypeRegistry.playS2C().register(BoosterStrikeFeedbackPayload.TYPE, BoosterStrikeFeedbackPayload.CODEC);
+        PayloadTypeRegistry.playS2C().register(BoosterStrikeStackPayload.TYPE, BoosterStrikeStackPayload.CODEC);
         PayloadTypeRegistry.playS2C().register(BoosterHudStatePayload.TYPE, BoosterHudStatePayload.CODEC);
         PayloadTypeRegistry.playS2C().register(BoosterShakeStatePayload.TYPE, BoosterShakeStatePayload.CODEC);
 
@@ -120,6 +122,7 @@ public class BoosterMod implements ModInitializer {
         ServerPlayConnectionEvents.JOIN.register((handler, sender, server) -> server.execute(() -> {
             syncHudState(handler.player.server, handler.player);
             syncShakeState(handler.player.server, handler.player);
+            BoostStrikeHandler.syncStackToPlayer(handler.player);
         }));
 
         CommandRegistrationCallback.EVENT.register((dispatcher, registryAccess, environment) ->
