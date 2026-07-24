@@ -1,5 +1,6 @@
 package com.boostermod.client;
 
+import com.boostermod.hud.ChargeAppearAnimation;
 import net.minecraft.client.gui.GuiGraphics;
 
 /**
@@ -75,131 +76,134 @@ final class BoosterHudRenderer {
             float chargeAppear,
             int chargeTicks,
             int chargeDurationTicks,
-            int maxChargeTicks) {
+            int maxChargeTicks,
+            boolean drawMainPanel) {
         int hudWidth = showStack ? HUD_WIDTH_TRIPLE : HUD_WIDTH_DUAL;
         int hotbarLeft = drawContext.guiWidth() / 2 - HOTBAR_HALF_WIDTH;
         int hotbarTop = drawContext.guiHeight() - HOTBAR_HEIGHT;
         int x = hotbarLeft + HOTBAR_HALF_WIDTH * 2 + HOTBAR_RIGHT_MARGIN;
         int y = hotbarTop;
 
-        int leftThruster = ready ? THRUSTER_READY : blendColor(THRUSTER_IDLE, THRUSTER_CHARGING, charge);
-        int rightThruster = ready
-                ? THRUSTER_READY
-                : blendColor(THRUSTER_IDLE, THRUSTER_CHARGING, Math.min(1.0f, charge + 0.12f));
+        if (drawMainPanel) {
+            int leftThruster = ready ? THRUSTER_READY : blendColor(THRUSTER_IDLE, THRUSTER_CHARGING, charge);
+            int rightThruster = ready
+                    ? THRUSTER_READY
+                    : blendColor(THRUSTER_IDLE, THRUSTER_CHARGING, Math.min(1.0f, charge + 0.12f));
 
-        drawContext.fill(x, y + 1, x + hudWidth, y + HUD_HEIGHT + 1, PANEL_SHADOW);
-        drawContext.fill(x, y, x + hudWidth, y + HUD_HEIGHT, PANEL_OUTLINE);
-        drawContext.fill(x + 1, y + 1, x + hudWidth - 1, y + HUD_HEIGHT - 1, PANEL_FILL);
+            drawContext.fill(x, y + 1, x + hudWidth, y + HUD_HEIGHT + 1, PANEL_SHADOW);
+            drawContext.fill(x, y, x + hudWidth, y + HUD_HEIGHT, PANEL_OUTLINE);
+            drawContext.fill(x + 1, y + 1, x + hudWidth - 1, y + HUD_HEIGHT - 1, PANEL_FILL);
 
-        // 顶部推进器灯（面板语义：这是推进器模块）
-        drawContext.fill(x + 2, y + 1, x + 5, y + 3, leftThruster);
-        drawContext.fill(x + hudWidth - 5, y + 1, x + hudWidth - 2, y + 3, rightThruster);
+            // 顶部推进器灯（面板语义：这是推进器模块）
+            drawContext.fill(x + 2, y + 1, x + 5, y + 3, leftThruster);
+            drawContext.fill(x + hudWidth - 5, y + 1, x + hudWidth - 2, y + 3, rightThruster);
 
-        int coreLeft = x + 2;
-        int coreRight = x + hudWidth - 2;
-        int coreTop = y + 4;
-        int coreBottom = y + HUD_HEIGHT - 2;
-        drawContext.fill(coreLeft, coreTop, coreRight, coreBottom, CORE_FILL);
+            int coreLeft = x + 2;
+            int coreRight = x + hudWidth - 2;
+            int coreTop = y + 4;
+            int coreBottom = y + HUD_HEIGHT - 2;
+            drawContext.fill(coreLeft, coreTop, coreRight, coreBottom, CORE_FILL);
 
-        // 图标带 + 条带分区：图标在上，计量条在下
-        int iconBandTop = coreTop + 1;
-        int iconBandBottom = iconBandTop + 3;
-        int barTop = iconBandBottom + 1;
-        int barBottom = coreBottom - 1;
+            // 图标带 + 条带分区：图标在上，计量条在下
+            int iconBandTop = coreTop + 1;
+            int iconBandBottom = iconBandTop + 3;
+            int barTop = iconBandBottom + 1;
+            int barBottom = coreBottom - 1;
 
-        // 布局：CD | DUR [| ST] —— 叠层在耐久右侧；轨宽固定，不把「剩余宽度」全塞给耐久
-        int cursor = coreLeft + 1;
-        int cdLeft = cursor;
-        int cdRight = cdLeft + TRACK_CD;
-        cursor = cdRight + TRACK_GAP;
-        int durLeft = cursor;
-        int durRight = durLeft + TRACK_DUR;
-        cursor = durRight + TRACK_GAP;
-        int stLeft = cursor;
-        int stRight = stLeft + TRACK_ST;
+            // 布局：CD | DUR [| ST] —— 叠层在耐久右侧；轨宽固定，不把「剩余宽度」全塞给耐久
+            int cursor = coreLeft + 1;
+            int cdLeft = cursor;
+            int cdRight = cdLeft + TRACK_CD;
+            cursor = cdRight + TRACK_GAP;
+            int durLeft = cursor;
+            int durRight = durLeft + TRACK_DUR;
+            cursor = durRight + TRACK_GAP;
+            int stLeft = cursor;
+            int stRight = stLeft + TRACK_ST;
 
-        // 轨井背景
-        drawTrackWell(drawContext, cdLeft, cdRight, iconBandTop, barBottom);
-        drawTrackWell(drawContext, durLeft, durRight, iconBandTop, barBottom);
-        if (showStack) {
-            drawTrackWell(drawContext, stLeft, stRight, iconBandTop, barBottom);
-        }
+            // 轨井背景
+            drawTrackWell(drawContext, cdLeft, cdRight, iconBandTop, barBottom);
+            drawTrackWell(drawContext, durLeft, durRight, iconBandTop, barBottom);
+            if (showStack) {
+                drawTrackWell(drawContext, stLeft, stRight, iconBandTop, barBottom);
+            }
 
-        // 语义图标（始终显示，即使条为空也能认）
-        int cdIconColor = ready ? COOLDOWN_READY : blendColor(ICON_DIM, COOLDOWN_ICON, 0.55f + 0.45f * charge);
-        drawIconFlame(drawContext, cdLeft, iconBandTop, cdIconColor);
+            // 语义图标（始终显示，即使条为空也能认）
+            int cdIconColor = ready ? COOLDOWN_READY : blendColor(ICON_DIM, COOLDOWN_ICON, 0.55f + 0.45f * charge);
+            drawIconFlame(drawContext, cdLeft, iconBandTop, cdIconColor);
 
-        int durabilityColor = durability > 0.55f
-                ? blendColor(DURABILITY_MID, DURABILITY_HIGH, (durability - 0.55f) / 0.45f)
-                : blendColor(DURABILITY_LOW, DURABILITY_MID, durability / 0.55f);
-        int durIconColor = blendColor(ICON_DIM, DURABILITY_ICON, 0.4f + 0.6f * Math.max(0.15f, durability));
-        drawIconHeart(drawContext, durLeft + 1, iconBandTop, durIconColor);
+            int durabilityColor = durability > 0.55f
+                    ? blendColor(DURABILITY_MID, DURABILITY_HIGH, (durability - 0.55f) / 0.45f)
+                    : blendColor(DURABILITY_LOW, DURABILITY_MID, durability / 0.55f);
+            int durIconColor = blendColor(ICON_DIM, DURABILITY_ICON, 0.4f + 0.6f * Math.max(0.15f, durability));
+            drawIconHeart(drawContext, durLeft + 1, iconBandTop, durIconColor);
 
-        if (showStack) {
-            float clampedStack = Math.max(0.0f, Math.min(1.0f, stackRatio));
-            int stackIconColor = clampedStack > 0.01f
-                    ? blendColor(STACK_LOW, STACK_FULL, clampedStack)
-                    : blendColor(ICON_DIM, STACK_ICON, 0.35f);
-            drawIconBlade(drawContext, stLeft, iconBandTop, stackIconColor);
-        }
+            if (showStack) {
+                float clampedStack = Math.max(0.0f, Math.min(1.0f, stackRatio));
+                int stackIconColor = clampedStack > 0.01f
+                        ? blendColor(STACK_LOW, STACK_FULL, clampedStack)
+                        : blendColor(ICON_DIM, STACK_ICON, 0.35f);
+                drawIconBlade(drawContext, stLeft, iconBandTop, stackIconColor);
+            }
 
-        // 计量条
-        drawVerticalMeter(
-                drawContext,
-                cdLeft,
-                cdRight,
-                barTop,
-                barBottom,
-                charge,
-                ready ? COOLDOWN_READY : COOLDOWN_CHARGING);
-
-        drawVerticalMeter(
-                drawContext,
-                durLeft,
-                durRight,
-                barTop,
-                barBottom,
-                durability,
-                durabilityColor);
-
-        if (showStack) {
-            float clampedStack = Math.max(0.0f, Math.min(1.0f, stackRatio));
-            int stackColor = clampedStack >= 0.99f
-                    ? STACK_FULL
-                    : clampedStack > 0.5f
-                            ? blendColor(STACK_MID, STACK_FULL, (clampedStack - 0.5f) / 0.5f)
-                            : blendColor(STACK_LOW, STACK_MID, clampedStack / 0.5f);
-
-            drawSegmentedMeter(
+            // 计量条
+            drawVerticalMeter(
                     drawContext,
-                    stLeft,
-                    stRight,
+                    cdLeft,
+                    cdRight,
                     barTop,
                     barBottom,
-                    clampedStack,
-                    stackColor);
+                    charge,
+                    ready ? COOLDOWN_READY : COOLDOWN_CHARGING);
 
-            // 寿命：条顶 1px，亮度 ∝ 剩余时间
-            float time = Math.max(0.0f, Math.min(1.0f, stackTimeRatio));
-            if (clampedStack > 0.0f && time > 0.0f) {
-                int timeAlpha = Math.round(0x50 + 0xAF * time);
-                int timeColor = (timeAlpha << 24) | (STACK_TIME_GLOW & 0x00FFFFFF);
-                drawContext.fill(stLeft, barTop, stRight, barTop + 1, timeColor);
+            drawVerticalMeter(
+                    drawContext,
+                    durLeft,
+                    durRight,
+                    barTop,
+                    barBottom,
+                    durability,
+                    durabilityColor);
+
+            if (showStack) {
+                float clampedStack = Math.max(0.0f, Math.min(1.0f, stackRatio));
+                int stackColor = clampedStack >= 0.99f
+                        ? STACK_FULL
+                        : clampedStack > 0.5f
+                                ? blendColor(STACK_MID, STACK_FULL, (clampedStack - 0.5f) / 0.5f)
+                                : blendColor(STACK_LOW, STACK_MID, clampedStack / 0.5f);
+
+                drawSegmentedMeter(
+                        drawContext,
+                        stLeft,
+                        stRight,
+                        barTop,
+                        barBottom,
+                        clampedStack,
+                        stackColor);
+
+                // 寿命：条顶 1px，亮度 ∝ 剩余时间
+                float time = Math.max(0.0f, Math.min(1.0f, stackTimeRatio));
+                if (clampedStack > 0.0f && time > 0.0f) {
+                    int timeAlpha = Math.round(0x50 + 0xAF * time);
+                    int timeColor = (timeAlpha << 24) | (STACK_TIME_GLOW & 0x00FFFFFF);
+                    drawContext.fill(stLeft, barTop, stRight, barTop + 1, timeColor);
+                }
+                if (clampedStack >= 0.99f) {
+                    int pulse = 40 + (tickCount % 12) * 5;
+                    int glow = (Math.min(0x7F, pulse) << 24) | (STACK_FULL & 0x00FFFFFF);
+                    drawContext.fill(stLeft, y - 1, stRight, y, glow);
+                }
             }
-            if (clampedStack >= 0.99f) {
-                int pulse = 40 + (tickCount % 12) * 5;
-                int glow = (Math.min(0x7F, pulse) << 24) | (STACK_FULL & 0x00FFFFFF);
-                drawContext.fill(stLeft, y - 1, stRight, y, glow);
+
+            if (ready) {
+                int pulse = 35 + (tickCount % 10) * 6;
+                int glow = (Math.min(0x7F, pulse) << 24) | (COOLDOWN_READY_GLOW & 0x00FFFFFF);
+                drawContext.fill(cdLeft, y - 1, cdRight, y, glow);
             }
         }
 
-        if (ready) {
-            int pulse = 35 + (tickCount % 10) * 6;
-            int glow = (Math.min(0x7F, pulse) << 24) | (COOLDOWN_READY_GLOW & 0x00FFFFFF);
-            drawContext.fill(cdLeft, y - 1, cdRight, y, glow);
-        }
-
-        if (chargeAppear > 0.01f) {
+        if (ChargeAppearAnimation.shouldRender(chargeAppear)) {
             drawChargeRail(
                     drawContext,
                     x + hudWidth + CHARGE_GAP,
@@ -221,11 +225,11 @@ final class BoosterHudRenderer {
             int chargeDurationTicks,
             int maxChargeTicks,
             int tickCount) {
-        float scale = 0.7f + 0.3f * appear;
+        float scale = ChargeAppearAnimation.heightScale(appear);
         int height = Math.max(4, Math.round(HUD_HEIGHT * scale));
         int top = y + (HUD_HEIGHT - height);
         int width = CHARGE_TRACK_WIDTH;
-        int alpha = Math.round(0xFF * appear);
+        int alpha = ChargeAppearAnimation.alpha(appear);
 
         g.fill(x, top + 1, x + width, top + height + 1, withAlpha(PANEL_SHADOW, Math.round(0x78 * appear)));
         g.fill(x, top, x + width, top + height, withAlpha(PANEL_OUTLINE, alpha));
