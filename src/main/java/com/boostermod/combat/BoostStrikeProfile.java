@@ -5,6 +5,9 @@ import com.boostermod.tier.BoosterTier;
 /**
  * 推进破击分档数值。持续时间已相对初稿整体 +30%。
  * 命中/击杀攻击加成为<strong>叠层增量</strong>（可叠加，受 {@link #maxStackBonus} 上限约束）。
+ * <p>
+ * 满叠口径（相对上一版整体 ×2，按实测两刀才能杀掉上调）：
+ * 钻石剑满叠属性 7+14=21，即使未吃到强制暴击也可秒僵尸/骷髅（20 HP）。
  */
 public record BoostStrikeProfile(
         float bonusDamage,
@@ -24,15 +27,15 @@ public record BoostStrikeProfile(
     public static BoostStrikeProfile forTier(BoosterTier tier) {
         return switch (tier) {
             case WOOD, STONE, COPPER -> new BoostStrikeProfile(
-                    2.0f, 1.0, HIT_DURATION_TICKS, 2.0, KILL_DURATION_TICKS_LOW, 24.0);
+                    0.0f, 1.5, HIT_DURATION_TICKS, 2.0, KILL_DURATION_TICKS_LOW, 14.0);
             case IRON -> new BoostStrikeProfile(
-                    3.0f, 1.5, HIT_DURATION_TICKS, 3.0, KILL_DURATION_TICKS_LOW, 28.0);
+                    0.0f, 2.0, HIT_DURATION_TICKS, 2.5, KILL_DURATION_TICKS_LOW, 14.0);
             case GOLD -> new BoostStrikeProfile(
-                    4.0f, 2.0, HIT_DURATION_TICKS, 4.0, KILL_DURATION_TICKS_LOW, 32.0);
+                    0.0f, 2.0, HIT_DURATION_TICKS, 3.0, KILL_DURATION_TICKS_LOW, 14.0);
             case DIAMOND -> new BoostStrikeProfile(
-                    6.0f, 3.0, HIT_DURATION_TICKS, 5.0, KILL_DURATION_TICKS_HIGH, 36.0);
+                    0.0f, 2.5, HIT_DURATION_TICKS, 4.0, KILL_DURATION_TICKS_HIGH, 14.0);
             case NETHERITE -> new BoostStrikeProfile(
-                    8.0f, 4.0, HIT_DURATION_TICKS, 7.0, KILL_DURATION_TICKS_HIGH, 40.0);
+                    0.0f, 3.0, HIT_DURATION_TICKS, 5.0, KILL_DURATION_TICKS_HIGH, 14.0);
         };
     }
 

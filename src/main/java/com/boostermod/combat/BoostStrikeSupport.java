@@ -141,11 +141,14 @@ public final class BoostStrikeSupport {
     }
 
     /**
-     * 破击窗口内强制近战「满蓄力 + 暴击」（跳过下落/离地/非疾跑，且连点不吃半蓄力惩罚）。
-     * 覆盖：推进推力全程 + 结束后 {@link #POST_BOOST_GRACE_TICKS} 宽限。
+     * 破击窗口内、且<strong>真实</strong>攻击已满蓄力时，强制暴击（跳过下落/离地/非疾跑等原版条件）。
+     * 窗口内伤害仍按满蓄力结算（见 mixin），与暴击条件分离——推进瞬间半蓄力也是满伤，但不强制暴击。
+     * <p>
+     * 注意：不可在 {@code Player.attack} 内于 {@code resetAttackStrengthTicker} 之后再读 strength——
+     * 会恒为未充满；需由 mixin 在抬满 scale 之前缓存真实值。
      */
-    public static boolean shouldForceCritical(Player player) {
-        return isBoostStrikeWindow(player);
+    public static boolean shouldForceCritical(Player player, float realAttackStrengthBeforeBoost) {
+        return isBoostStrikeWindow(player) && realAttackStrengthBeforeBoost > 0.9f;
     }
 
     public static void applyReachBonus(Player player) {

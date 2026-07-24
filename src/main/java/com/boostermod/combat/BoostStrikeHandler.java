@@ -233,6 +233,8 @@ public final class BoostStrikeHandler {
         if (!entity.isDeadOrDying() && profile.bonusDamage() > 0.0f) {
             APPLYING_BONUS.set(Boolean.TRUE);
             try {
+                // 主伤害刚结算会拉起无敌帧，同帧追加破击伤害必须清掉，否则 bonus 常为 0。
+                entity.invulnerableTime = 0;
                 entity.hurt(player.damageSources().playerAttack(player), profile.bonusDamage());
             } finally {
                 APPLYING_BONUS.set(Boolean.FALSE);
