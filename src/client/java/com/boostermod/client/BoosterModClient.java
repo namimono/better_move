@@ -54,6 +54,7 @@ public class BoosterModClient implements ClientModInitializer {
             BoosterShakeState.reset();
             BoostStrikeClientState.reset();
             BoostStrikeStackState.reset();
+            BoosterInputHandler.reset();
         });
 
         HudRenderCallback.EVENT.register((drawContext, tickCounter) -> BoosterCooldownHud.render(drawContext));

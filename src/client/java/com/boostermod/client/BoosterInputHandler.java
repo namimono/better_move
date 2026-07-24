@@ -1,9 +1,16 @@
 package com.boostermod.client;
 
+import com.boostermod.charge.ChargeSession;
+import com.boostermod.item.BoosterEquipment;
+import com.boostermod.network.BoosterChargeCancelPayload;
+import com.boostermod.network.BoosterChargeStartPayload;
 import com.boostermod.network.BoosterRequestPayload;
 import com.boostermod.network.BoosterSteerPayload;
+import com.boostermod.upgrade.BoosterUpgradeHelper;
+import com.boostermod.upgrade.BoosterUpgradeType;
 import net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking;
 import net.minecraft.client.KeyMapping;
+import net.minecraft.client.Minecraft;
 import net.minecraft.client.player.LocalPlayer;
 
 final class BoosterInputHandler {
@@ -15,6 +22,9 @@ final class BoosterInputHandler {
     private static int ticksSinceLandingAfterJump = Integer.MAX_VALUE;
     private static boolean sawJumpArc;
     private static boolean wasOnGround;
+    private static boolean wasBoostDown;
+    private static boolean localCharging;
+    private static int localChargeStartTick;
 
     private BoosterInputHandler() {}
 
@@ -24,6 +34,19 @@ final class BoosterInputHandler {
         wasOnGround = false;
         lastSentStrafe = 0.0f;
         lastSentForward = 0.0f;
+        wasBoostDown = false;
+        clearLocalCharge();
+    }
+
+    static boolean isLocalCharging() {
+        return localCharging;
+    }
+
+    static int localChargeTicks(LocalPlayer player) {
+        if (!localCharging) {
+            return 0;
+        }
+        return Math.max(0, Math.min(ChargeSession.MAX_CHARGE_TICKS, player.tickCount - localChargeStartTick));
     }
 
     /**
@@ -31,9 +54,49 @@ final class BoosterInputHandler {
      * 若推进放在 END，服务端会先收到攻击再收到推进，破击窗口未开、首刀无法必暴。
      */
     static void tickBoostKey(LocalPlayer player, KeyMapping boostKey) {
+        Minecraft client = Minecraft.getInstance();
+        boolean hasCharge = hasChargeUpgrade(player);
+
+        if (hasCharge) {
+            // 排空 click 队列，避免松手后走瞬发旁路。
+            while (boostKey.consumeClick()) {
+                // drain
+            }
+
+            if (client.screen != null) {
+                if (localCharging || wasBoostDown) {
+                    cancelLocalCharge();
+                }
+                wasBoostDown = false;
+                return;
+            }
+
+            boolean down = boostKey.isDown();
+            if (localCharging && localChargeTicks(player) >= ChargeSession.MAX_CHARGE_TICKS) {
+                // 服务端将强制释放；清本地蓄力，松手不再补发开火包。
+                clearLocalCharge();
+                BoostStrikeClientState.onBoostRequest();
+            }
+            if (down && !wasBoostDown) {
+                if (canSoftStartCharge(player)) {
+                    beginLocalCharge(player);
+                }
+            } else if (!down && wasBoostDown) {
+                if (localCharging) {
+                    fireChargeRelease(player);
+                }
+            }
+            wasBoostDown = down;
+            return;
+        }
+
+        // 无过载蓄力：保留点按瞬发。
+        if (localCharging) {
+            clearLocalCharge();
+        }
+        wasBoostDown = false;
         while (boostKey.consumeClick()) {
             double[] boostDirection = horizontalInputVector(player);
-            // 立刻开客户端破击窗口（触及/辅助锁定），不等 S2C。
             BoostStrikeClientState.onBoostRequest();
             ClientPlayNetworking.send(new BoosterRequestPayload(
                     boostDirection[0],
@@ -46,6 +109,62 @@ final class BoosterInputHandler {
     static void tickEnd(LocalPlayer player) {
         trackHyperWindows(player);
         syncSteerInput(player);
+    }
+
+    private static void beginLocalCharge(LocalPlayer player) {
+        localCharging = true;
+        localChargeStartTick = player.tickCount;
+        ClientPlayNetworking.send(BoosterChargeStartPayload.INSTANCE);
+    }
+
+    private static void fireChargeRelease(LocalPlayer player) {
+        clearLocalCharge();
+        double[] boostDirection = horizontalInputVector(player);
+        BoostStrikeClientState.onBoostRequest();
+        ClientPlayNetworking.send(new BoosterRequestPayload(
+                boostDirection[0],
+                boostDirection[1],
+                -1,
+                landingTicksAgoForPayload()));
+    }
+
+    private static void cancelLocalCharge() {
+        if (localCharging) {
+            ClientPlayNetworking.send(BoosterChargeCancelPayload.INSTANCE);
+        }
+        clearLocalCharge();
+    }
+
+    private static void clearLocalCharge() {
+        localCharging = false;
+        localChargeStartTick = 0;
+    }
+
+    private static boolean hasChargeUpgrade(LocalPlayer player) {
+        return BoosterEquipment.find(player)
+                .map(equipped -> BoosterUpgradeHelper.hasUpgrade(
+                        equipped.stack(), BoosterUpgradeType.CHARGE, player.registryAccess()))
+                .orElse(false);
+    }
+
+    private static boolean canSoftStartCharge(LocalPlayer player) {
+        if (player.isSpectator() || !player.isAlive() || player.isSleeping()) {
+            return false;
+        }
+        BoosterEquipment.Equipped equipped = BoosterEquipment.find(player).orElse(null);
+        if (equipped == null) {
+            return false;
+        }
+        var registries = player.registryAccess();
+        if (!BoosterUpgradeHelper.hasUpgrade(equipped.stack(), BoosterUpgradeType.CHARGE, registries)) {
+            return false;
+        }
+        boolean noCooldown = BoosterUpgradeHelper.hasUpgrade(
+                equipped.stack(), BoosterUpgradeType.NO_COOLDOWN, registries);
+        if (!noCooldown && player.getCooldowns().isOnCooldown(equipped.item())) {
+            return false;
+        }
+        return player.getAbilities().instabuild || player.getFoodData().getFoodLevel() >= 6;
     }
 
     private static void trackHyperWindows(LocalPlayer player) {

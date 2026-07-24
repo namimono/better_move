@@ -1,12 +1,15 @@
 package com.boostermod;
 
 import com.boostermod.combat.BoostStrikeHandler;
+import com.boostermod.charge.ChargeSessionTracker;
 import com.boostermod.command.BoosterModCommand;
 import com.boostermod.feedback.BoosterShakeSettings;
 import com.boostermod.hud.BoosterHudSettings;
 import com.boostermod.item.BoosterEquipment;
 import com.boostermod.item.BoosterLeggingsItem;
 import com.boostermod.item.BoosterMotionTicker;
+import com.boostermod.network.BoosterChargeCancelPayload;
+import com.boostermod.network.BoosterChargeStartPayload;
 import com.boostermod.network.BoosterFeedbackPayload;
 import com.boostermod.network.BoosterHudStatePayload;
 import com.boostermod.network.BoosterShakeStatePayload;
@@ -21,6 +24,7 @@ import com.boostermod.upgrade.BoosterUpgradeItem;
 import com.boostermod.upgrade.BoosterUpgradeType;
 import net.fabricmc.api.ModInitializer;
 import net.fabricmc.fabric.api.command.v2.CommandRegistrationCallback;
+import net.fabricmc.fabric.api.entity.event.v1.ServerEntityWorldChangeEvents;
 import net.fabricmc.fabric.api.event.lifecycle.v1.ServerTickEvents;
 import net.fabricmc.fabric.api.itemgroup.v1.FabricItemGroup;
 import net.fabricmc.fabric.api.networking.v1.PayloadTypeRegistry;
@@ -61,6 +65,8 @@ public class BoosterMod implements ModInitializer {
             registerUpgrade("random_impulse_upgrade", BoosterUpgradeType.RANDOM_IMPULSE);
     public static final Item BOOST_STRIKE_UPGRADE =
             registerUpgrade("boost_strike_upgrade", BoosterUpgradeType.BOOST_STRIKE);
+    public static final Item CHARGE_UPGRADE =
+            registerUpgrade("charge_upgrade", BoosterUpgradeType.CHARGE);
 
     public static final MenuType<BoosterUpgradeMenu> BOOSTER_UPGRADE_MENU = Registry.register(
             BuiltInRegistries.MENU,
@@ -92,11 +98,14 @@ public class BoosterMod implements ModInitializer {
                             output.accept(NO_COOLDOWN_UPGRADE);
                             output.accept(RANDOM_IMPULSE_UPGRADE);
                             output.accept(BOOST_STRIKE_UPGRADE);
+                            output.accept(CHARGE_UPGRADE);
                         })
                         .build()
         );
 
         PayloadTypeRegistry.playC2S().register(BoosterRequestPayload.TYPE, BoosterRequestPayload.CODEC);
+        PayloadTypeRegistry.playC2S().register(BoosterChargeStartPayload.TYPE, BoosterChargeStartPayload.CODEC);
+        PayloadTypeRegistry.playC2S().register(BoosterChargeCancelPayload.TYPE, BoosterChargeCancelPayload.CODEC);
         PayloadTypeRegistry.playC2S().register(BoosterSteerPayload.TYPE, BoosterSteerPayload.CODEC);
         PayloadTypeRegistry.playS2C().register(BoosterFeedbackPayload.TYPE, BoosterFeedbackPayload.CODEC);
         PayloadTypeRegistry.playS2C().register(BoosterStrikeFeedbackPayload.TYPE, BoosterStrikeFeedbackPayload.CODEC);
@@ -106,19 +115,30 @@ public class BoosterMod implements ModInitializer {
 
         ServerPlayNetworking.registerGlobalReceiver(BoosterRequestPayload.TYPE, (payload, context) ->
                 context.server().execute(() ->
-                        BoosterLeggingsItem.tryBoostFromKey(
+                        ChargeSessionTracker.onFireRequest(
                                 context.player(),
                                 payload.dirX(),
                                 payload.dirZ(),
                                 payload.jumpTicksAgo(),
                                 payload.landingTicksAgo()))
         );
+        ServerPlayNetworking.registerGlobalReceiver(BoosterChargeStartPayload.TYPE, (payload, context) ->
+                context.server().execute(() -> ChargeSessionTracker.tryStart(context.player()))
+        );
+        ServerPlayNetworking.registerGlobalReceiver(BoosterChargeCancelPayload.TYPE, (payload, context) ->
+                context.server().execute(() -> ChargeSessionTracker.cancel(context.player()))
+        );
         ServerPlayNetworking.registerGlobalReceiver(BoosterSteerPayload.TYPE, (payload, context) ->
                 context.server().execute(() -> BoosterMotionTicker.setSteerInput(
                         context.player().getUUID(), payload.strafe(), payload.forward()))
         );
         ServerPlayConnectionEvents.DISCONNECT.register((handler, server) ->
-                server.execute(() -> BoosterMotionTicker.cancel(handler.player)));
+                server.execute(() -> {
+                    BoosterMotionTicker.cancel(handler.player);
+                    ChargeSessionTracker.clear(handler.player);
+                }));
+        ServerEntityWorldChangeEvents.AFTER_PLAYER_CHANGE_WORLD.register(
+                (player, origin, destination) -> ChargeSessionTracker.cancel(player));
         ServerPlayConnectionEvents.JOIN.register((handler, sender, server) -> server.execute(() -> {
             syncHudState(handler.player.server, handler.player);
             syncShakeState(handler.player.server, handler.player);
@@ -128,6 +148,7 @@ public class BoosterMod implements ModInitializer {
         CommandRegistrationCallback.EVENT.register((dispatcher, registryAccess, environment) ->
                 BoosterModCommand.register(dispatcher));
         ServerTickEvents.END_SERVER_TICK.register(server -> {
+            ChargeSessionTracker.tickServer(server);
             BoosterLeggingsItem.tickActiveMotions(server);
             BoostStrikeHandler.tickServer(server);
         });

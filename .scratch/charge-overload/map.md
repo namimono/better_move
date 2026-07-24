@@ -14,7 +14,7 @@ Labels: `wayfinder:map`
 - **技能**：决策类默认 `/grilling` + `/domain-modeling`；外部 API 事实用 `/research`；需要可感行为时用 `/prototype`。
 - **Charting 已锁定的产品约束**（实现与后续票不得无故推翻；要改先开新票）：
   1. **形态**：新升级项；未安装 = 现状点按瞬发。
-  2. **输入**：按住 Z 蓄力，松开释放；满 **5s**（3s 蓄力 + 2s 过载）自动释放；开 UI / 卸装 / 死亡等 **取消且不推进**。
+  2. **输入**：按住 Z 蓄力，松开释放；满 **5s**（3s 蓄力 + 2s 过载）**强制释放**；开 UI / 卸装 / 死亡等 **取消蓄力**（不推进）。
   3. **距离**：0～3s **线性** 加远；3～5s 过载 **距离封顶**；点按极短蓄力 ≈ 现状基础距离。
   4. **过载爆炸**：仅过载推进；**首次**碰固体方块或实体炸 **一次** 后结束；水/岩浆等液体不炸、不因此结束；松手不原地炸；**自伤 2 心仅在爆炸时**；全程未碰则不炸不自伤。
   5. **叠化**：空中冲刺 / 无冷却 / 随机距离 / 垂直起飞 / Hyper 可叠；推进中再按 Z **忽略**；碰实体时爆炸优先于破击（该帧不破击）。
@@ -25,13 +25,18 @@ Labels: `wayfinder:map`
 
 ## Decisions so far
 
-（charting 会话不关闭决策票；research 票由 subagent 解析后写入。）
-
+- [Research: explosion API for overload impact](issues/06-research-explosion-api.md) — Mojmap `explode` + 另扣自伤；流体不触发；钩 `BoosterMotionTicker.step`（power/交互以 balance 票为准，非笔记示例 4 TNT）。
 - [Research: hold-to-charge networking on Fabric 1.21](issues/05-research-charge-networking.md) — Server-clocked Start+Release (new empty C2S start; reuse `BoosterRequestPayload` for fire); client `isDown` edges; no client chargeTicks authority.
+- [Upgrade item identity and craft](issues/02-upgrade-item-identity.md) — `CHARGE`/`charge_upgrade`; Charge Upgrade / **过载蓄力**; short tooltip; craft ≈ air dash; `stacksTo(1)` + no duplicate type.
+- [Domain vocabulary for charge and overload](issues/01-domain-vocabulary.md) — `CONTEXT.md` 词表：过载蓄力/蓄力/过载/蓄力时长/过载窗口/释放/强制释放/过载爆炸/取消蓄力；边界：推进·升级项·遁地·推进破击·Hyper。
+- [Charge and overload feedback acceptance bar](issues/04-charge-ui-vfx-bar.md) — P0：同区单条两段色蓄力轨 + 淡入/缩放出场 + 可区分粒子；不准星；爆炸用原版；色值/音效/像素布局自由。
+- [Charge distance and explosion balance numbers](issues/03-balance-numbers.md) — 0s 1.0× → 3s 1.8× 线性；impulse+thrustPerTick 同乘；爆炸 power 3 MOB+mobGriefing；自伤 generic 4。
+- [Edge-case matrix for charge lifecycle](issues/07-edge-cases-matrix.md) — 蓄力生命周期矩阵：模式/环境/冷却饱食/UI卸装传送/空中无空中冲刺/强制释放竞态；取消免费；失败释放不结算。
+- [Handoff readiness for implementation](issues/08-handoff-readiness.md) — Destination 已达；一页纸 handoff（读序、锁定摘要、实现顺序、非目标）；route 走完。
+
 ## Not yet specified
 
-- 多人服领地 / 区域保护插件下爆炸破坏的兼容策略（是否跟 `mobGriefing` 或其它 gamerule）。
-- 蓄力中传送、维度切换、旁观模式等极端中断的完整表（部分会在 edge-case 票里钉）。
+- 多人服领地 / 区域保护插件下爆炸破坏的兼容策略（原版侧已定跟 `mobGriefing`；第三方插件另议）。
 - 正式 UI 贴图与音效素材制作流程（决策只钉「要有什么反馈」，不钉美术管线）。
 - 实现拆分几个 PR / 是否先做无 VFX 的逻辑垂直切片（map 走完后的执行规划，非本 destination 必选）。
 

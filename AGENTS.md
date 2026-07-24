@@ -30,3 +30,17 @@ This file is set up by the update script automatically.
 - The Gradle wrapper (`./gradlew`) auto-downloads the correct Gradle version on first run. Subsequent builds are fast (under 1s when cached).
 - The `run/` directory is the Minecraft server's working directory (generated at runtime, gitignored).
 - CI (`.github/workflows/build.yml`) uses JDK 25 on Ubuntu; the project's source/target compatibility is Java 21.
+
+## Agent skills
+
+### Issue tracker
+
+Issues live as markdown files under `.scratch/<feature>/`. See `docs/agents/issue-tracker.md`.
+
+### Triage labels
+
+Default five-role vocabulary (`needs-triage`, `needs-info`, `ready-for-agent`, `ready-for-human`, `wontfix`). See `docs/agents/triage-labels.md`.
+
+### Domain docs
+
+Single-context layout: root `CONTEXT.md` + `docs/adr/`. See `docs/agents/domain.md`.

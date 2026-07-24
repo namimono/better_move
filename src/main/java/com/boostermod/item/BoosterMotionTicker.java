@@ -2,6 +2,7 @@ package com.boostermod.item;
 
 import com.boostermod.BoosterMod;
 import com.boostermod.balance.BoosterBalanceProfile;
+import com.boostermod.charge.OverloadExplosion;
 import com.boostermod.combat.BoostStrikeSupport;
 import java.util.Iterator;
 import java.util.Map;
@@ -30,6 +31,16 @@ public final class BoosterMotionTicker {
         return ACTIVE.containsKey(player.getUUID());
     }
 
+    /** 过载推进本帧将撞击时，破击应让路。 */
+    public static boolean shouldSuppressStrikeForOverloadImpact(ServerPlayer player) {
+        ActiveBoost boost = ACTIVE.get(player.getUUID());
+        if (boost == null || !boost.overloaded || boost.exploded) {
+            return false;
+        }
+        return OverloadExplosion.isSolidOrEntityImpact(
+                boost.level, player, boost.groundLaunch && boost.tick < 2);
+    }
+
     public static void setSteerInput(UUID playerId, float strafe, float forward) {
         // Boost steering now follows look direction only, so movement-key steer input is ignored.
     }
@@ -43,6 +54,19 @@ public final class BoosterMotionTicker {
             double eyeOffsetY,
             boolean hyper,
             boolean groundLaunch) {
+        start(level, player, direction, profile, originEye, eyeOffsetY, hyper, groundLaunch, false);
+    }
+
+    public static void start(
+            ServerLevel level,
+            ServerPlayer player,
+            Vec3 direction,
+            BoosterBalanceProfile profile,
+            Vec3 originEye,
+            double eyeOffsetY,
+            boolean hyper,
+            boolean groundLaunch,
+            boolean overloaded) {
         applyStepHeightBoost(player);
         BoostStrikeSupport.onBoostStart(player);
 
@@ -66,7 +90,10 @@ public final class BoosterMotionTicker {
         player.resetFallDistance();
         player.hurtMarked = true;
 
-        ACTIVE.put(player.getUUID(), new ActiveBoost(level, direction, profile, originEye, eyeOffsetY, groundLaunch, grantedNoGravity));
+        ACTIVE.put(
+                player.getUUID(),
+                new ActiveBoost(
+                        level, direction, profile, originEye, eyeOffsetY, groundLaunch, grantedNoGravity, overloaded));
     }
 
     public static void tickServer(MinecraftServer server) {
@@ -128,7 +155,9 @@ public final class BoosterMotionTicker {
         private final double eyeOffsetY;
         private final boolean groundLaunch;
         private final boolean grantedNoGravity;
+        private final boolean overloaded;
         private boolean grantedApexNoGravity;
+        private boolean exploded;
         private int tick;
 
         private ActiveBoost(
@@ -138,7 +167,8 @@ public final class BoosterMotionTicker {
                 Vec3 originEye,
                 double eyeOffsetY,
                 boolean groundLaunch,
-                boolean grantedNoGravity) {
+                boolean grantedNoGravity,
+                boolean overloaded) {
             this.level = level;
             this.fallbackDirection = fallbackDirection;
             this.profile = profile;
@@ -146,10 +176,19 @@ public final class BoosterMotionTicker {
             this.eyeOffsetY = eyeOffsetY;
             this.groundLaunch = groundLaunch;
             this.grantedNoGravity = grantedNoGravity;
+            this.overloaded = overloaded;
         }
 
         private boolean step(ServerPlayer player) {
-            if (player.horizontalCollision) {
+            if (overloaded && !exploded && OverloadExplosion.isSolidOrEntityImpact(
+                    level, player, groundLaunch && tick < 2)) {
+                OverloadExplosion.detonate(level, player);
+                exploded = true;
+                emitEndParticles(player.position());
+                return true;
+            }
+
+            if (!overloaded && player.horizontalCollision) {
                 emitEndParticles(player.position());
                 return true;
             }

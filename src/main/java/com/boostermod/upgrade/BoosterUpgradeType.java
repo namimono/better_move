@@ -7,7 +7,9 @@ public enum BoosterUpgradeType {
     NO_COOLDOWN("no_cooldown_upgrade"),
     RANDOM_IMPULSE("random_impulse_upgrade"),
     /** 推进破击：推进中主动近战命中才触发，非碰撞冲撞。 */
-    BOOST_STRIKE("boost_strike_upgrade");
+    BOOST_STRIKE("boost_strike_upgrade"),
+    /** 过载蓄力：按住蓄力松开释放，过载推进可触发过载爆炸。 */
+    CHARGE("charge_upgrade");
 
     private final String itemId;
 

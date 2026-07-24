@@ -1,8 +1,10 @@
 package com.boostermod.combat;
 
 import com.boostermod.BoosterMod;
+import com.boostermod.charge.OverloadExplosion;
 import com.boostermod.item.BoosterEquipment;
 import com.boostermod.item.BoosterLeggingsItem;
+import com.boostermod.item.BoosterMotionTicker;
 import com.boostermod.network.BoosterStrikeFeedbackPayload;
 import com.boostermod.network.BoosterStrikeStackPayload;
 import com.boostermod.tier.BoosterTier;
@@ -64,6 +66,10 @@ public final class BoostStrikeHandler {
                 return InteractionResult.PASS;
             }
             if (!BoostStrikeSupport.isBoostStrikeWindow(serverPlayer)) {
+                return InteractionResult.PASS;
+            }
+            if (OverloadExplosion.explodedThisTick(serverPlayer)
+                    || BoosterMotionTicker.shouldSuppressStrikeForOverloadImpact(serverPlayer)) {
                 return InteractionResult.PASS;
             }
             BoosterEquipment.Equipped equipped = BoosterEquipment.find(serverPlayer).orElse(null);
@@ -209,6 +215,10 @@ public final class BoostStrikeHandler {
         }
         ServerPlayer player = meleeAttacker(source);
         if (player == null) {
+            return;
+        }
+        if (OverloadExplosion.explodedThisTick(player)
+                || BoosterMotionTicker.shouldSuppressStrikeForOverloadImpact(player)) {
             return;
         }
         PrimaryAttack primary = matchPrimary(player, entity);

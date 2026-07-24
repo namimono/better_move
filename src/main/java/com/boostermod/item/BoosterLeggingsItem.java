@@ -2,6 +2,8 @@ package com.boostermod.item;
 
 import com.boostermod.balance.BoosterBalanceManager;
 import com.boostermod.balance.BoosterBalanceProfile;
+import com.boostermod.charge.ChargeSessionTracker;
+import com.boostermod.charge.OverloadExplosion;
 import com.boostermod.network.BoosterFeedbackPayload;
 import com.boostermod.screen.BoosterUpgradeMenuProvider;
 import com.boostermod.tier.BoosterTier;
@@ -41,11 +43,6 @@ public class BoosterLeggingsItem extends Item implements Equipable {
     private static final float MOVEMENT_BOOST_HUNGER_EXHAUSTION = 1.0f;
     private static final float BOOST_SOUND_VOLUME = 1.0f;
     private static final float BOOST_SOUND_PITCH = 1.2f;
-    /** 起跳前的最小前向探测距离：若该格内无法容纳玩家，则视为贴墙，不消耗冷却。 */
-    private static final double FORWARD_PROBE_DISTANCE = 0.1;
-    /** 探测前向时允许上抬的最大高度（与 {@link BoosterMotionTicker} 的 step height 提升保持一致）。 */
-    private static final double PROBE_STEP_UP_MAX = 1.0;
-    private static final double PROBE_STEP_UP_GRAIN = 0.05;
     private static final int MIN_FOOD_LEVEL = 6;
     private static final int BURROW_DEPTH_BLOCKS = 6;
     /** 大致朝下才遁地；越大越不容易误触（90° 为竖直向下）。 */
@@ -119,6 +116,16 @@ public class BoosterLeggingsItem extends Item implements Equipable {
             double clientDirZ,
             int jumpTicksAgo,
             int landingTicksAgo) {
+        tryBoostFromKey(player, clientDirX, clientDirZ, jumpTicksAgo, landingTicksAgo, null);
+    }
+
+    public static void tryBoostFromKey(
+            ServerPlayer player,
+            double clientDirX,
+            double clientDirZ,
+            int jumpTicksAgo,
+            int landingTicksAgo,
+            ChargeSessionTracker.ChargeBoostContext charge) {
         BoosterEquipment.Equipped equipped = BoosterEquipment.find(player).orElse(null);
         if (equipped == null) {
             return;
@@ -147,10 +154,21 @@ public class BoosterLeggingsItem extends Item implements Equipable {
             return;
         }
 
+        double distanceMultiplier = charge == null ? 1.0 : charge.distanceMultiplier();
+        boolean overloaded = charge != null && charge.overloaded();
+
         boolean burrowUpgrade = BoosterUpgradeHelper.hasUpgrade(
                 boosterStack, BoosterUpgradeType.BURROW, registries);
         if (burrowUpgrade && isLookingRoughlyDown(player)) {
-            if (!boosterItem.applyBurrow(level, player, equipped)) {
+            boolean burrowed = boosterItem.applyBurrow(level, player, equipped);
+            if (!burrowed && !overloaded) {
+                return;
+            }
+            // 过载遁地：即使 0 格失败也在当前位置炸一次；成功则先遁地再炸。
+            if (overloaded) {
+                OverloadExplosion.detonate(level, player);
+            }
+            if (!burrowed) {
                 return;
             }
             ServerPlayNetworking.send(player, new BoosterFeedbackPayload(false));
@@ -164,7 +182,7 @@ public class BoosterLeggingsItem extends Item implements Equipable {
         Vec3 direction = BoosterUpgradeHelper.hasUpgrade(
                 boosterStack, BoosterUpgradeType.VERTICAL_LAUNCH, registries)
                 ? VERTICAL_LAUNCH_DIRECTION
-                : boosterItem.resolveBoostDirection(level, player, groundLaunch);
+                : boosterItem.resolveBoostDirection(player);
         if (direction == null) {
             return;
         }
@@ -179,7 +197,9 @@ public class BoosterLeggingsItem extends Item implements Equipable {
                 direction,
                 hyper,
                 groundLaunch,
-                randomImpulse);
+                randomImpulse,
+                distanceMultiplier,
+                overloaded);
         ServerPlayNetworking.send(player, new BoosterFeedbackPayload(hyper));
         if (!noCooldown) {
             player.getCooldowns().addCooldown(boosterItem, COOLDOWN_TICKS);
@@ -201,53 +221,14 @@ public class BoosterLeggingsItem extends Item implements Equipable {
     }
 
     /**
-     * 计算推进方向并做一次性前向碰撞探测：方向非零且前方至少能容纳 {@link #FORWARD_PROBE_DISTANCE} 才放行。
-     * 实际飞行距离不再预先扫描，完全由 {@link BoosterMotionTicker} 的物理推力与 MC 引擎决定。
+     * 计算推进方向。贴墙也允许推进，撞墙由运动步进挡住（不再因前向探测失败拒发）。
      */
-    private Vec3 resolveBoostDirection(Level level, Player player, boolean groundLaunch) {
+    private Vec3 resolveBoostDirection(Player player) {
         Vec3 direction = player.getViewVector(1.0f);
         if (direction.lengthSqr() < 1.0e-6) {
             return null;
         }
-        direction = direction.normalize();
-        AABB originBox = player.getBoundingBox();
-        Vec3 probeDirection = groundLaunch ? horizontalProbeDirection(direction) : direction;
-        Vec3 probe = probeDirection.scale(FORWARD_PROBE_DISTANCE);
-        if (!hasForwardClearance(level, player, originBox, probe)) {
-            return null;
-        }
-        return direction;
-    }
-
-    private static boolean hasForwardClearance(Level level, Player player, AABB originBox, Vec3 probe) {
-        if (canFitOffset(level, player, originBox, probe)) {
-            return true;
-        }
-        for (double up = PROBE_STEP_UP_GRAIN; up <= PROBE_STEP_UP_MAX + 1.0e-6; up += PROBE_STEP_UP_GRAIN) {
-            if (canFitOffset(level, player, originBox, probe.add(0.0, up, 0.0))) {
-                return true;
-            }
-        }
-        return false;
-    }
-
-    private static boolean canFitOffset(Level level, Player player, AABB originBox, Vec3 offset) {
-        AABB movedBox = originBox.move(offset.x, offset.y, offset.z);
-        if (!level.getWorldBorder().isWithinBounds(movedBox)) {
-            return false;
-        }
-        if (level.getBlockCollisions(player, movedBox).iterator().hasNext()) {
-            return false;
-        }
-        return level.getEntityCollisions(player, movedBox).isEmpty();
-    }
-
-    private static Vec3 horizontalProbeDirection(Vec3 direction) {
-        Vec3 horizontal = new Vec3(direction.x, 0.0, direction.z);
-        if (horizontal.lengthSqr() < 1.0e-6) {
-            return direction;
-        }
-        return horizontal.normalize();
+        return direction.normalize();
     }
 
     private void applyBoost(
@@ -257,15 +238,24 @@ public class BoosterLeggingsItem extends Item implements Equipable {
             Vec3 direction,
             boolean hyper,
             boolean groundLaunch,
-            boolean randomImpulse) {
+            boolean randomImpulse,
+            double distanceMultiplier,
+            boolean overloaded) {
         BoosterBalanceProfile balance = randomImpulse ? withRandomImpulse(currentBalance(level)) : currentBalance(level);
+        if (distanceMultiplier != 1.0) {
+            balance = new BoosterBalanceProfile(
+                    balance.impulse() * distanceMultiplier,
+                    balance.thrustPerTick() * distanceMultiplier,
+                    balance.thrustTicks());
+        }
         Vec3 originEye = player.getEyePosition();
         double eyeOffsetY = player.getEyeY() - player.getY();
 
         spendBoostResources(level, player, equipped);
         playBoostSound(level, originEye);
 
-        BoosterMotionTicker.start(level, player, direction, balance, originEye, eyeOffsetY, hyper, groundLaunch);
+        BoosterMotionTicker.start(
+                level, player, direction, balance, originEye, eyeOffsetY, hyper, groundLaunch, overloaded);
     }
 
     private boolean applyBurrow(

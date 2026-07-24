@@ -54,6 +54,13 @@ final class BoosterHudRenderer {
     /** 叠层分段数：像「层」而不是油量。 */
     private static final int STACK_SEGMENTS = 4;
 
+    private static final int CHARGE_TRACK_WIDTH = 4;
+    private static final int CHARGE_GAP = 3;
+    private static final int CHARGE_SEGMENT = 0xFF5CC8FF;
+    private static final int CHARGE_OVERLOAD = 0xFFFF6B3D;
+    private static final int CHARGE_WELL = 0x90303A46;
+    private static final int CHARGE_DIVIDER = 0xAA1A222C;
+
     private BoosterHudRenderer() {}
 
     static void render(
@@ -64,7 +71,11 @@ final class BoosterHudRenderer {
             int tickCount,
             boolean showStack,
             float stackRatio,
-            float stackTimeRatio) {
+            float stackTimeRatio,
+            float chargeAppear,
+            int chargeTicks,
+            int chargeDurationTicks,
+            int maxChargeTicks) {
         int hudWidth = showStack ? HUD_WIDTH_TRIPLE : HUD_WIDTH_DUAL;
         int hotbarLeft = drawContext.guiWidth() / 2 - HOTBAR_HALF_WIDTH;
         int hotbarTop = drawContext.guiHeight() - HOTBAR_HEIGHT;
@@ -186,6 +197,69 @@ final class BoosterHudRenderer {
             int pulse = 35 + (tickCount % 10) * 6;
             int glow = (Math.min(0x7F, pulse) << 24) | (COOLDOWN_READY_GLOW & 0x00FFFFFF);
             drawContext.fill(cdLeft, y - 1, cdRight, y, glow);
+        }
+
+        if (chargeAppear > 0.01f) {
+            drawChargeRail(
+                    drawContext,
+                    x + hudWidth + CHARGE_GAP,
+                    y,
+                    chargeAppear,
+                    chargeTicks,
+                    chargeDurationTicks,
+                    maxChargeTicks,
+                    tickCount);
+        }
+    }
+
+    private static void drawChargeRail(
+            GuiGraphics g,
+            int x,
+            int y,
+            float appear,
+            int chargeTicks,
+            int chargeDurationTicks,
+            int maxChargeTicks,
+            int tickCount) {
+        float scale = 0.7f + 0.3f * appear;
+        int height = Math.max(4, Math.round(HUD_HEIGHT * scale));
+        int top = y + (HUD_HEIGHT - height);
+        int width = CHARGE_TRACK_WIDTH;
+        int alpha = Math.round(0xFF * appear);
+
+        g.fill(x, top + 1, x + width, top + height + 1, withAlpha(PANEL_SHADOW, Math.round(0x78 * appear)));
+        g.fill(x, top, x + width, top + height, withAlpha(PANEL_OUTLINE, alpha));
+        g.fill(x + 1, top + 1, x + width - 1, top + height - 1, withAlpha(CHARGE_WELL, Math.round(0x90 * appear)));
+
+        int barTop = top + 2;
+        int barBottom = top + height - 2;
+        int barHeight = Math.max(1, barBottom - barTop);
+        int dividerY = barBottom - Math.round(barHeight * (chargeDurationTicks / (float) maxChargeTicks));
+
+        float fillRatio = Math.max(0.0f, Math.min(1.0f, chargeTicks / (float) maxChargeTicks));
+        int filled = Math.round(barHeight * fillRatio);
+        if (filled > 0) {
+            int chargeFill = Math.min(filled, Math.max(0, barBottom - dividerY));
+            int overloadFill = filled - chargeFill;
+            if (chargeFill > 0) {
+                g.fill(x + 1, barBottom - chargeFill, x + width - 1, barBottom, withAlpha(CHARGE_SEGMENT, alpha));
+            }
+            if (overloadFill > 0) {
+                int pulse = 0xFF;
+                if (chargeTicks >= chargeDurationTicks) {
+                    pulse = 0xC0 + (tickCount % 8) * 6;
+                }
+                g.fill(
+                        x + 1,
+                        barBottom - filled,
+                        x + width - 1,
+                        barBottom - chargeFill,
+                        withAlpha(CHARGE_OVERLOAD, Math.min(alpha, pulse)));
+            }
+        }
+
+        if (dividerY > barTop && dividerY < barBottom) {
+            g.fill(x + 1, dividerY, x + width - 1, dividerY + 1, withAlpha(CHARGE_DIVIDER, alpha));
         }
     }
 
