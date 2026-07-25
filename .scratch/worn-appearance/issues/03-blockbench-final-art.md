@@ -4,9 +4,39 @@
 
 **Blocked by:** None — can start immediately
 
-**Status:** claimed
+**Status:** resolved
 
-- [ ] 五档穿戴外观 PNG：统一推进器剪影，材质色/纹路随等级变化
-- [ ] 五档物品栏图标 PNG：与穿戴外观风格一致、等级可辨
-- [ ] 资源命名/路径与规格中的定位约定一致，替换后无需改渲染逻辑即可生效（或与 01 的占位同路径）
-- [ ] 客户端加载无紫黑缺失贴图；并排对比五档可分辨等级
+- [x] 五档穿戴外观 PNG：统一推进器剪影，材质色/纹路随等级变化
+- [x] 五档物品栏图标 PNG：与穿戴外观风格一致、等级可辨
+- [x] 资源命名/路径与规格中的定位约定一致，替换后无需改渲染逻辑即可生效（或与 01 的占位同路径）
+- [x] 客户端加载无紫黑缺失贴图；并排对比五档可分辨等级
+
+## Answer
+
+### 资源路径（对齐 01 / `BoosterAppearanceTextures`）
+
+五档共用推进器剪影；只换材质色与细节色。直接替换 01 占位路径，无需改渲染逻辑：
+
+| 用途 | 路径 |
+| --- | --- |
+| 穿戴外观（护甲 layer_2，64×32） | `assets/boostermod/textures/models/armor/booster_leggings_{tier}_layer_2.png` |
+| 物品栏图标（item model `layer0`） | `assets/boostermod/textures/item/booster_leggings_{tier}.png` |
+
+对应定位：
+
+- 穿戴：`boostermod:textures/models/armor/booster_leggings_{tier}_layer_2.png`
+- 物品栏：`boostermod:item/booster_leggings_{tier}`
+
+### 制作说明
+
+- UV 遮罩对齐原版 `iron_layer_2`（64×32，不透明像素 280）。
+- 统一剪影细节：外侧喷嘴、腿背通风口、腰带与背部推进单元、膝部金属片。
+- 五档调色：铜（氧化青绿喷嘴）/ 铁（蓝喷嘴）/ 金（橙喷嘴）/ 钻石（亮青）/ 下界合金（暗底橙红喷嘴）。
+- 在 Blockbench 项目 `booster-worn-appearance` 中做喷嘴描边与铆钉等像素润色后导出。
+
+### 交付文件
+
+```
+src/main/resources/assets/boostermod/textures/models/armor/booster_leggings_{copper,iron,gold,diamond,netherite}_layer_2.png
+src/main/resources/assets/boostermod/textures/item/booster_leggings_{copper,iron,gold,diamond,netherite}.png
+```
