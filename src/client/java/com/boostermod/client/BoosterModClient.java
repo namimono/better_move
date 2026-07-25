@@ -25,6 +25,7 @@ public class BoosterModClient implements ClientModInitializer {
     @Override
     public void onInitializeClient() {
         MenuScreens.register(BoosterMod.BOOSTER_UPGRADE_MENU, BoosterUpgradeScreen::new);
+        BoosterLegsArmorRenderer.register();
 
         boostKey = KeyBindingHelper.registerKeyBinding(new KeyMapping(
                 "key.boostermod.boost",
