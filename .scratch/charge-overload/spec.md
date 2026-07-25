@@ -1,6 +1,6 @@
 # Spec: 过载蓄力升级项
 
-Status: ready-for-agent
+Status: done
 
 ## Problem Statement
 
@@ -110,3 +110,15 @@ Status: ready-for-agent
 - 决策来源：`.scratch/charge-overload/map.md` Notes（8 条产品约束）及 issues 01–08 全部 resolved Answer；详细 API 事实见 `docs/research/charge-overload-networking.md` 与 `docs/research/charge-overload-explosion.md`。
 - 实现入口可读序见 `issues/08-handoff-readiness.md` Answer；本 `spec.md` 为 AFK/实现 session 的规格真源，handoff 票作导航。
 - Fog（不挡开工）：插件兼容、美术管线、PR 是否先做无 VFX 垂直切片——执行时自行决定即可。
+
+## Comments
+
+### 2026-07-25 — Spec 完结
+
+功能已按本规格交付，验收通过，本 spec 关闭（`Status: done`）。
+
+- **实现**：`a342748` feat(charge): 实现过载蓄力升级项；`bec473a` fix(charge-hud): 可感知的蓄力轨淡入淡出。
+- **主接缝**：`ChargeSession` / `ChargeSessionTracker`；网络 `BoosterChargeStartPayload` / `BoosterChargeCancelPayload`；物品 `charge_upgrade`；过载爆炸与 HUD/粒子 P0。
+- **自动化验证**：`./gradlew test` BUILD SUCCESSFUL（`ChargeSessionTest`、`ChargeAppearAnimationTest`）。
+- **手测**：按规格边界矩阵完成，确认可关闭。
+- **仍属 Out of Scope / Fog**（不挡关闭）：领地插件爆炸兼容、正式美术管线、非 P0 镜头抖/FOV/循环音效。

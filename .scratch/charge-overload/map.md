@@ -5,7 +5,7 @@ Labels: `wayfinder:map`
 ## Destination
 
 一份 **可直接开写代码的决策闭环**：蓄力 / 过载作为推进器 **升级项** 的产品规则、领域词、关键数值边界、网络与爆炸可行性均已决清；实现 session 不再卡在「要不要 / 怎么表现 / 和谁叠」上。  
-**本 map 不交付可运行代码。**
+**本 map 不交付可运行代码。**（研究 destination 已达；实现已按 [`spec.md`](spec.md) 交付并完结，见下方 Decisions。）
 
 ## Notes
 
@@ -33,6 +33,7 @@ Labels: `wayfinder:map`
 - [Charge distance and explosion balance numbers](issues/03-balance-numbers.md) — 0s 1.0× → 3s 1.8× 线性；impulse+thrustPerTick 同乘；爆炸 power 3 MOB+mobGriefing；自伤 generic 4。
 - [Edge-case matrix for charge lifecycle](issues/07-edge-cases-matrix.md) — 蓄力生命周期矩阵：模式/环境/冷却饱食/UI卸装传送/空中无空中冲刺/强制释放竞态；取消免费；失败释放不结算。
 - [Handoff readiness for implementation](issues/08-handoff-readiness.md) — Destination 已达；一页纸 handoff（读序、锁定摘要、实现顺序、非目标）；route 走完。
+- [Spec: 过载蓄力升级项](spec.md) — 实现与验收完成，`Status: done`（2026-07-25）；单测 `./gradlew test` 通过，手测矩阵确认。
 
 ## Not yet specified
 
