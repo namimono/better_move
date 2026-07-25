@@ -15,7 +15,8 @@ Labels: `wayfinder:map`
 
 - [01 — 护腿槽可见 + 物品栏图标 + 定位接缝](issues/01-legs-slot-appearance.md) — `BoosterAppearanceTextures` + `BoosterLegsArmorRenderer`；占位路径 `booster_leggings_<tier>_layer_2.png` / `item/booster_leggings_<tier>`。
 - [03 — Blockbench 正式穿戴与物品栏贴图](issues/03-blockbench-final-art.md) — 正式 PNG 替换占位；UV 对齐原版 layer_2；五档同剪影异材质；路径不变。
+- [02 — 饰品槽同样可见](issues/02-trinket-slot-appearance.md) — `BoosterWornLegsAppearance` 共用绘制；`BoosterTrinketRenderer` 软依赖注册五档；贴图仍走 `BoosterAppearanceTextures`。
 
 ## Fog of war
 
-- [02 — 饰品槽同样可见](issues/02-trinket-slot-appearance.md) — blocked by 01（已 resolved，可开做）。
+（无未解阻塞项；本 effort 三票已 resolved。）

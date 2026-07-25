@@ -14,6 +14,7 @@ import net.fabricmc.fabric.api.client.keybinding.v1.KeyBindingHelper;
 import net.fabricmc.fabric.api.client.networking.v1.ClientPlayConnectionEvents;
 import net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking;
 import net.fabricmc.fabric.api.client.rendering.v1.HudRenderCallback;
+import net.fabricmc.loader.api.FabricLoader;
 import net.minecraft.client.KeyMapping;
 import net.minecraft.client.gui.screens.MenuScreens;
 import net.minecraft.client.player.LocalPlayer;
@@ -26,6 +27,7 @@ public class BoosterModClient implements ClientModInitializer {
     public void onInitializeClient() {
         MenuScreens.register(BoosterMod.BOOSTER_UPGRADE_MENU, BoosterUpgradeScreen::new);
         BoosterLegsArmorRenderer.register();
+        initTrinketsClientCompat();
 
         boostKey = KeyBindingHelper.registerKeyBinding(new KeyMapping(
                 "key.boostermod.boost",
@@ -86,5 +88,19 @@ public class BoosterModClient implements ClientModInitializer {
             BoostStrikeStackState.tick();
             BoosterInputHandler.tickEnd(player);
         });
+    }
+
+    private static void initTrinketsClientCompat() {
+        if (!FabricLoader.getInstance().isModLoaded("trinkets")) {
+            return;
+        }
+        try {
+            Class.forName("com.boostermod.client.compat.BoosterTrinketsClientCompat")
+                    .getMethod("register")
+                    .invoke(null);
+        } catch (ReflectiveOperationException e) {
+            throw new IllegalStateException(
+                    "Trinkets is present but booster trinket appearance failed to load", e);
+        }
     }
 }
