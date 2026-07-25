@@ -7,7 +7,7 @@
 **Status:** resolved
 
 - [x] 五档穿戴外观 PNG：统一推进器剪影，材质色/纹路随等级变化
-- [x] 五档物品栏图标 PNG：与穿戴外观风格一致、等级可辨
+- [x] 五档物品栏图标 PNG：沿用既有资源、等级可辨（后续决定不与穿戴外观强制同风格）
 - [x] 资源命名/路径与规格中的定位约定一致，替换后无需改渲染逻辑即可生效（或与 01 的占位同路径）
 - [x] 客户端加载无紫黑缺失贴图；并排对比五档可分辨等级
 
@@ -20,7 +20,7 @@
 | 用途 | 路径 |
 | --- | --- |
 | 穿戴外观（护甲 layer_2，64×32） | `assets/boostermod/textures/models/armor/booster_leggings_{tier}_layer_2.png` |
-| 物品栏图标（item model `layer0`） | `assets/boostermod/textures/item/booster_leggings_{tier}.png` |
+| 物品栏图标（沿用既有，非 Blockbench 重绘） | `assets/boostermod/textures/item/booster_leggings_{tier}.png` |
 
 对应定位：
 
@@ -38,5 +38,10 @@
 
 ```
 src/main/resources/assets/boostermod/textures/models/armor/booster_leggings_{copper,iron,gold,diamond,netherite}_layer_2.png
-src/main/resources/assets/boostermod/textures/item/booster_leggings_{copper,iron,gold,diamond,netherite}.png
 ```
+
+物品栏图标路径仍由 `BoosterAppearanceTextures.inventoryIcon` 指向既有资源，但 PNG 内容保留 03 之前的原套，不随 Blockbench 穿戴图替换。
+
+## Comments
+
+- 后续调整：物品栏 UI 图标改回原来那一套；穿戴外观继续用 Blockbench 正式图。接受穿戴与物品栏风格不统一。

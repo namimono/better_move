@@ -4,7 +4,7 @@ Labels: `wayfinder:map`
 
 ## Destination
 
-五档推进器（铜～下界合金）有统一剪影的原版护甲感穿戴外观与物品栏图标；护腿槽与饰品槽装备时均可见；不加护甲值。
+五档推进器（铜～下界合金）有统一剪影的原版护甲感穿戴外观；物品栏沿用既有图标（可不与穿戴同风格）；护腿槽与饰品槽装备时均可见；不加护甲值。
 
 ## Notes
 
@@ -14,7 +14,7 @@ Labels: `wayfinder:map`
 ## Decisions so far
 
 - [01 — 护腿槽可见 + 物品栏图标 + 定位接缝](issues/01-legs-slot-appearance.md) — `BoosterAppearanceTextures` + `BoosterLegsArmorRenderer`；占位路径 `booster_leggings_<tier>_layer_2.png` / `item/booster_leggings_<tier>`。
-- [03 — Blockbench 正式穿戴与物品栏贴图](issues/03-blockbench-final-art.md) — 正式 PNG 替换占位；UV 对齐原版 layer_2；五档同剪影异材质；路径不变。
+- [03 — Blockbench 正式穿戴与物品栏贴图](issues/03-blockbench-final-art.md) — 正式穿戴 PNG 替换占位；物品栏改回沿用既有图标，不要求与穿戴同风格。
 - [02 — 饰品槽同样可见](issues/02-trinket-slot-appearance.md) — `BoosterWornLegsAppearance` 共用绘制；`BoosterTrinketRenderer` 软依赖注册五档；贴图仍走 `BoosterAppearanceTextures`。
 
 ## Fog of war
