@@ -1,0 +1,4 @@
+interface:
+  display_name: "更新开发进度"
+  short_description: "根据代码事实、验证结果与待办状态维护可信开发进度文档"
+  default_prompt: "Use $update-development-progress to update the project development-progress document from this coding session."
