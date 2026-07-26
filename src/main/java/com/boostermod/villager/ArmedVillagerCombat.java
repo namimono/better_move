@@ -52,7 +52,7 @@ public final class ArmedVillagerCombat {
                 clearEngagement(villager);
                 return false;
             }
-            chase(villager, engagement.target());
+            tickCombatActions(villager, engagement.target());
             return true;
         }
 
@@ -62,14 +62,26 @@ public final class ArmedVillagerCombat {
         }
 
         beginEngagement(villager, target);
-        chase(villager, target);
+        tickCombatActions(villager, target);
         return true;
     }
 
     public static void clearEngagement(Villager villager) {
+        ArmedVillagerMelee.clear(villager);
+        VillagerBoostRunner.clear(villager);
         if (ENGAGEMENTS.remove(villager.getUUID()) != null) {
             villager.setTarget(null);
             villager.getNavigation().stop();
+        }
+    }
+
+    private static void tickCombatActions(Villager villager, Player target) {
+        ArmedVillagerMelee.tickAttack(villager, target);
+        if (!VillagerBoostRunner.isBoosting(villager)) {
+            VillagerBoostRunner.tryStartBoost(villager, target);
+        }
+        if (!VillagerBoostRunner.isBoosting(villager)) {
+            chase(villager, target);
         }
     }
 

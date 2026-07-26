@@ -363,7 +363,8 @@ public class BoosterLeggingsItem extends Item implements Equipable {
         return new BoosterBalanceProfile(impulse, balance.thrustPerTick(), balance.thrustTicks());
     }
 
-    static void emitTrailParticles(ServerLevel level, Vec3 from, Vec3 to) {
+    /** 世界可见的云雾轨迹；玩家推进与村民推进共用。 */
+    public static void emitTrailParticles(ServerLevel level, Vec3 from, Vec3 to) {
         double distance = from.distanceTo(to);
         int count = Math.max(4, (int) (distance * 4));
         for (int i = 0; i < count; i++) {
