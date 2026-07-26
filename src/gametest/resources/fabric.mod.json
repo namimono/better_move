@@ -6,7 +6,8 @@
 	"environment": "*",
 	"entrypoints": {
 		"fabric-gametest": [
-			"com.boostermod.gametest.ArmedVillagerEquipmentGameTest"
+			"com.boostermod.gametest.ArmedVillagerEquipmentGameTest",
+			"com.boostermod.gametest.ArmedVillagerEngagementGameTest"
 		]
 	}
 }

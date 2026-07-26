@@ -25,6 +25,13 @@ public final class ArmedVillagerEquipment {
         return stack.is(ItemTags.SWORDS);
     }
 
+    /** 武装村民：成年 + 护腿推进器 + 主手剑；实时派生，不持久化。 */
+    public static boolean isArmed(Villager villager) {
+        return isAdultVillager(villager)
+                && isBooster(villager.getItemBySlot(EquipmentSlot.LEGS))
+                && isSword(villager.getItemBySlot(EquipmentSlot.MAINHAND));
+    }
+
     public static boolean canEquipBooster(Villager villager) {
         return isAdultVillager(villager) && villager.getItemBySlot(EquipmentSlot.LEGS).isEmpty();
     }
