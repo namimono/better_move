@@ -1,0 +1,12 @@
+{
+	"schemaVersion": 1,
+	"id": "boostermod-gametest",
+	"version": "1.0.0",
+	"name": "Booster Mod GameTest",
+	"environment": "*",
+	"entrypoints": {
+		"fabric-gametest": [
+			"com.boostermod.gametest.ArmedVillagerEquipmentGameTest"
+		]
+	}
+}

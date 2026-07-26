@@ -20,10 +20,11 @@ This file is set up by the update script automatically.
 
 ### Build & Run
 
-- **Build**: `./gradlew build` (compiles mod, produces JAR in `build/libs/`)
+- **Build**: `./gradlew build` (compiles mod, runs JUnit + Fabric GameTest via `check`, produces JAR in `build/libs/`)
 - **Run server** (headless): `./gradlew runServer` — first run requires `echo "eula=true" > run/eula.txt`
 - **Run client** (requires display): `./gradlew runClient`
-- **No automated tests** exist in this project; `./gradlew test` reports NO-SOURCE.
+- **JUnit**: `./gradlew test` (pure unit tests under `src/test/`)
+- **GameTest**: `./gradlew runGameTest` (server GameTests under `src/gametest/`; also runs as part of `build`/`check`)
 
 ### Notes
 
