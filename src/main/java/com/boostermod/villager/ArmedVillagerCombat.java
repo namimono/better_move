@@ -53,6 +53,10 @@ public final class ArmedVillagerCombat {
                 return false;
             }
             tickCombatActions(villager, engagement.target());
+            if (!ArmedVillagerEquipment.isArmed(villager)) {
+                clearEngagement(villager);
+                return false;
+            }
             return true;
         }
 
@@ -63,6 +67,10 @@ public final class ArmedVillagerCombat {
 
         beginEngagement(villager, target);
         tickCombatActions(villager, target);
+        if (!ArmedVillagerEquipment.isArmed(villager)) {
+            clearEngagement(villager);
+            return false;
+        }
         return true;
     }
 
@@ -79,6 +87,10 @@ public final class ArmedVillagerCombat {
         ArmedVillagerMelee.tickAttack(villager, target);
         if (!VillagerBoostRunner.isBoosting(villager)) {
             VillagerBoostRunner.tryStartBoost(villager, target);
+        }
+        // 推进耗尽耐久等导致退出武装后，本 tick 不再追击或继续攻击编排。
+        if (!ArmedVillagerEquipment.isArmed(villager)) {
+            return;
         }
         if (!VillagerBoostRunner.isBoosting(villager)) {
             chase(villager, target);

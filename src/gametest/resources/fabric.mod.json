@@ -8,7 +8,8 @@
 		"fabric-gametest": [
 			"com.boostermod.gametest.ArmedVillagerEquipmentGameTest",
 			"com.boostermod.gametest.ArmedVillagerEngagementGameTest",
-			"com.boostermod.gametest.ArmedVillagerAttackBoostGameTest"
+			"com.boostermod.gametest.ArmedVillagerAttackBoostGameTest",
+			"com.boostermod.gametest.ArmedVillagerBoostBoundaryGameTest"
 		]
 	}
 }

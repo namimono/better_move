@@ -66,12 +66,13 @@ public final class VillagerBoostRunner {
 
     /**
      * 交战中尝试发起村民推进；成功则立即损耗推进器 1 点耐久并进入冷却。
+     * 升级项与 Hyper 一律忽略，只使用等级基础平衡参数。
      */
     public static boolean tryStartBoost(Villager villager, LivingEntity target) {
         if (!(villager.level() instanceof ServerLevel serverLevel)) {
             return false;
         }
-        if (isBoosting(villager) || !villager.onGround()) {
+        if (isBoosting(villager) || !canLaunchFromEnvironment(villager)) {
             return false;
         }
         if (isOnCooldown(villager)) {
@@ -108,6 +109,12 @@ public final class VillagerBoostRunner {
 
         legs.hurtAndBreak(1, villager, EquipmentSlot.LEGS);
         playBoostSound(serverLevel, originEye);
+        COOLDOWN_UNTIL.put(villager.getUUID(), serverLevel.getGameTime() + COOLDOWN_TICKS);
+
+        // 耗尽耐久后立即退出武装：不残留推进运行状态。
+        if (!(villager.getItemBySlot(EquipmentSlot.LEGS).getItem() instanceof BoosterLeggingsItem)) {
+            return false;
+        }
 
         villager.getNavigation().stop();
         villager.setOnGround(false);
@@ -121,8 +128,16 @@ public final class VillagerBoostRunner {
         ACTIVE.put(
                 villager.getUUID(),
                 new ActiveBoost(serverLevel, direction, balance, originEye, eyeOffsetY));
-        COOLDOWN_UNTIL.put(villager.getUUID(), serverLevel.getGameTime() + COOLDOWN_TICKS);
         return true;
+    }
+
+    /** 地面、非液体、非载具、非拴绳。 */
+    static boolean canLaunchFromEnvironment(Villager villager) {
+        return villager.onGround()
+                && !villager.isInWaterOrBubble()
+                && !villager.isInLava()
+                && !villager.isPassenger()
+                && !villager.isLeashed();
     }
 
     private static boolean isOnCooldown(Villager villager) {
@@ -196,7 +211,7 @@ public final class VillagerBoostRunner {
         }
 
         private boolean step(Villager villager) {
-            if (villager.horizontalCollision) {
+            if (shouldEndBoost(villager)) {
                 emitEndParticles(villager.position());
                 return true;
             }
@@ -210,7 +225,7 @@ public final class VillagerBoostRunner {
             double progress = (double) tick / totalTicks;
             double thrust = profile.thrustPerTick() * (1.0 - progress);
             Vec3 velocity = maybeSuppressGravityAtApex(villager, villager.getDeltaMovement());
-            // 固定发起方向，不按视线持续追踪。
+            // 固定发起方向，不按视线持续追踪；忽略所有升级项与 Hyper。
             villager.setDeltaMovement(
                     velocity.x + direction.x * thrust,
                     velocity.y + direction.y * thrust,
@@ -223,6 +238,17 @@ public final class VillagerBoostRunner {
             villager.hurtMarked = true;
             tick++;
             return false;
+        }
+
+        private boolean shouldEndBoost(Villager villager) {
+            if (villager.horizontalCollision) {
+                return true;
+            }
+            if (villager.isInWaterOrBubble() || villager.isInLava()) {
+                return true;
+            }
+            // 失去推进器或剑等任一武装条件时立即结束，不残留运行状态。
+            return !ArmedVillagerEquipment.isArmed(villager);
         }
 
         private Vec3 maybeSuppressGravityAtApex(Villager villager, Vec3 velocity) {
