@@ -1,4 +1,0 @@
-interface:
-  display_name: "需求实施方案编写"
-  short_description: "把原始需求与代码现状收敛为含可回填验收用例的完整实施方案"
-  default_prompt: "使用 $draft-implementation-plan 分析需求与代码库，生成包含可回填测试结果验收用例的实施方案。"
