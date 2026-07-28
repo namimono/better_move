@@ -21,6 +21,8 @@
 	"item.boostermod.boost_strike_upgrade.tooltip": "During boost and ~0.5s after: long reach and sticky targeting; melee deals full-charge damage in-window, with forced crits only when truly fully charged; swords wide-sweep. Hits stack attack power; kills stack more and reset booster cooldown (capped; clears when the buff expires). At full stacks, diamond sword or better is needed to one-shot zombies/skeletons. Boosting alone does not damage entities.",
 	"item.boostermod.charge_upgrade": "Charge Upgrade",
 	"item.boostermod.charge_upgrade.tooltip": "Hold Boost to charge; full charge overloads and can explode on impact.",
+	"item.boostermod.wall_break_upgrade": "Wall-Break Upgrade",
+	"item.boostermod.wall_break_upgrade.tooltip": "Boost through breakable walls along your flight path; costs health while inside walls.",
 	"item.boostermod.booster_leggings.no_upgrades": "No upgrades installed",
 	"item.boostermod.booster_leggings.upgrades_header": "Installed upgrades:",
 	"container.boostermod.booster_upgrade": "Booster Upgrades",
