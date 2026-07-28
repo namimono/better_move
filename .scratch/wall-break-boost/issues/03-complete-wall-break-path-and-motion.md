@@ -21,7 +21,7 @@
 
 已交付 issue 03：
 
-- `BoosterMotionTicker`：破壁资格可跨越 `thrustTicks`；墙内记录并维持前向速度；离墙停止保速；速度耗尽结束资格；墙内不跟视线改推力。
-- `WallBreakSupport`：抽离扫掠结果；`hasObstructionInSweep` 区分预清通道与真正离墙。
+- `BoosterMotionTicker`：破壁资格可跨越 `thrustTicks`；墙内记录并维持前向速度；离墙停止保速；落地或速度耗尽结束资格；墙内不跟视线改推力。
+- `WallBreakSupport`：抽离扫掠结果供清方与不可破坏判定复用。
 - `WallBreakBoostGameTest` 新增路径/运动用例（长墙无时限、出墙惯性、第二堵墙、侧看、斜向、高速、速度耗尽）；统一 `wallBreak_pathMotion` batch，走廊限制在 8×8×8 结构内以免污染邻近 GameTest。
 - `./gradlew test`、`./gradlew runGameTest`（70）、`./gradlew build` 均通过。

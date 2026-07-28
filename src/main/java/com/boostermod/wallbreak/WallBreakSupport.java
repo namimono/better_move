@@ -61,14 +61,6 @@ public final class WallBreakSupport {
         return sweep.toBreak().isEmpty() ? Outcome.NONE : Outcome.CLEARED;
     }
 
-    /**
-     * 扫掠范围内是否仍有碰撞阻挡（可破坏或不可破坏），用于判断是否仍处于连续墙体中。
-     */
-    public static boolean hasObstructionInSweep(ServerLevel level, ServerPlayer player, Vec3 motionHint) {
-        SweepResult sweep = sweep(level, player, motionHint);
-        return sweep != null && (sweep.hitUnbreakable() || !sweep.toBreak().isEmpty());
-    }
-
     private static SweepResult sweep(ServerLevel level, ServerPlayer player, Vec3 motionHint) {
         if (motionHint.lengthSqr() < 1.0e-10) {
             return null;

@@ -248,7 +248,7 @@ public final class BoosterMotionTicker {
             if (wallBreakActive && insideWallBreak) {
                 // 墙内：维持进入时前向速度，推力与视线不得改写破壁方向
                 applyVelocity(player, wallEntryVelocity);
-                if (clearForesight(player, wallEntryVelocity)) {
+                if (hitsUnbreakableAhead(player, wallEntryVelocity)) {
                     emitEndParticles(player.position());
                     return true;
                 }
@@ -264,7 +264,7 @@ public final class BoosterMotionTicker {
                         velocity.z + thrustDirection.z * thrust);
                 applyVelocity(player, next);
 
-                if (wallBreakActive && clearForesight(player, next)) {
+                if (wallBreakActive && hitsUnbreakableAhead(player, next)) {
                     emitEndParticles(player.position());
                     return true;
                 }
@@ -273,15 +273,17 @@ public final class BoosterMotionTicker {
                 if (!player.horizontalCollision) {
                     lastAppliedVelocity = player.getDeltaMovement();
                 }
-                if (clearForesight(player, flightHint(player))) {
+                if (hitsUnbreakableAhead(player, flightHint(player))) {
                     emitEndParticles(player.position());
                     return true;
                 }
             }
 
             if (player.onGround()) {
-                // 破壁资格期间继续抬离地面，避免贴地长廊被误判为落地结束
-                player.setOnGround(false);
+                if (insideWallBreak || !hasLeftGround) {
+                    // 墙内或尚未离地：抬离地面避免摩擦；已离地后的贴地由 shouldEnd 按落地处理
+                    player.setOnGround(false);
+                }
             } else {
                 hasLeftGround = true;
             }
@@ -299,16 +301,16 @@ public final class BoosterMotionTicker {
             if (!hasLeftGround) {
                 return false;
             }
-            Vec3 motion = player.horizontalCollision ? lastAppliedVelocity : player.getDeltaMovement();
-            double along = motion.dot(fallbackDirection);
-            // 落地：已离地过且当前贴地，且前向速度不再支撑破壁资格
-            if (player.onGround() && along < WALL_BREAK_SPEED_EXHAUSTED * 2.0) {
+            // 落地：结束破壁资格（与速度耗尽为或关系）
+            if (player.onGround()) {
                 return true;
             }
+            Vec3 motion = player.horizontalCollision ? lastAppliedVelocity : player.getDeltaMovement();
+            double along = motion.dot(fallbackDirection);
             return along < WALL_BREAK_SPEED_EXHAUSTED;
         }
 
-        private boolean clearForesight(ServerPlayer player, Vec3 motion) {
+        private boolean hitsUnbreakableAhead(ServerPlayer player, Vec3 motion) {
             WallBreakSupport.Outcome foresight = WallBreakSupport.clearSweptPath(level, player, motion);
             return foresight == WallBreakSupport.Outcome.HIT_UNBREAKABLE;
         }
@@ -337,11 +339,8 @@ public final class BoosterMotionTicker {
             }
 
             if (insideWallBreak) {
-                // 预清通道可能导致本 tick 无破坏；向前探测是否仍处于连续墙体
-                Vec3 probe = sweepHint.lengthSqr() > 1.0e-6
-                        ? sweepHint.normalize().scale(Math.max(sweepHint.length(), 2.5))
-                        : fallbackDirection.scale(2.5);
-                if (WallBreakSupport.hasObstructionInSweep(level, player, probe)) {
+                // 本 tick 未破坏且无水平碰撞：视为已离开连续墙体，停止保速
+                if (player.horizontalCollision) {
                     applyVelocity(player, wallEntryVelocity);
                     player.horizontalCollision = false;
                 } else {
