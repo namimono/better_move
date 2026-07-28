@@ -24,6 +24,8 @@ public final class BoosterMotionTicker {
     private static final double STEP_HEIGHT_BOOST = 0.5;
     private static final double GROUND_JUMP_KICK = 0.42;
     private static final double HYPER_IMPULSE_MULTIPLIER = 1.75;
+    /** 破壁资格：原推进方向速度低于此值视为基本耗尽。 */
+    private static final double WALL_BREAK_SPEED_EXHAUSTED = 0.12;
     private static final Map<UUID, ActiveBoost> ACTIVE = new ConcurrentHashMap<>();
 
     private BoosterMotionTicker() {}
@@ -185,6 +187,9 @@ public final class BoosterMotionTicker {
         private boolean exploded;
         private int tick;
         private Vec3 lastAppliedVelocity;
+        private boolean insideWallBreak;
+        private Vec3 wallEntryVelocity = Vec3.ZERO;
+        private boolean hasLeftGround;
 
         private ActiveBoost(
                 ServerLevel level,
@@ -218,8 +223,13 @@ public final class BoosterMotionTicker {
                 return true;
             }
 
-            if (wallBreakEligible && WallBreakSupport.isInstalled(player)) {
+            boolean wallBreakActive = wallBreakEligible && WallBreakSupport.isInstalled(player);
+            if (wallBreakActive) {
                 if (handleWallBreak(player)) {
+                    emitEndParticles(player.position());
+                    return true;
+                }
+                if (shouldEndWallBreakEligibility(player)) {
                     emitEndParticles(player.position());
                     return true;
                 }
@@ -229,32 +239,53 @@ public final class BoosterMotionTicker {
             }
 
             int totalTicks = profile.thrustTicks();
-            if (totalTicks <= 0 || tick >= totalTicks) {
+            boolean thrustActive = totalTicks > 0 && tick < totalTicks;
+            if (!thrustActive && !wallBreakActive) {
                 emitEndParticles(player.position());
                 return true;
             }
 
-            double progress = (double) tick / totalTicks;
-            double thrust = profile.thrustPerTick() * (1.0 - progress);
-            Vec3 look = player.getViewVector(1.0f);
-            Vec3 thrustDirection = look.lengthSqr() < 1.0e-6 ? fallbackDirection : look.normalize();
-            Vec3 velocity = maybeSuppressGravityAtApex(player, player.getDeltaMovement());
-            Vec3 next = new Vec3(
-                    velocity.x + thrustDirection.x * thrust,
-                    velocity.y + thrustDirection.y * thrust,
-                    velocity.z + thrustDirection.z * thrust);
-            applyVelocity(player, next);
+            if (wallBreakActive && insideWallBreak) {
+                // 墙内：维持进入时前向速度，推力与视线不得改写破壁方向
+                applyVelocity(player, wallEntryVelocity);
+                if (hitsUnbreakableAhead(player, wallEntryVelocity)) {
+                    emitEndParticles(player.position());
+                    return true;
+                }
+            } else if (thrustActive) {
+                double progress = (double) tick / totalTicks;
+                double thrust = profile.thrustPerTick() * (1.0 - progress);
+                Vec3 look = player.getViewVector(1.0f);
+                Vec3 thrustDirection = look.lengthSqr() < 1.0e-6 ? fallbackDirection : look.normalize();
+                Vec3 velocity = maybeSuppressGravityAtApex(player, player.getDeltaMovement());
+                Vec3 next = new Vec3(
+                        velocity.x + thrustDirection.x * thrust,
+                        velocity.y + thrustDirection.y * thrust,
+                        velocity.z + thrustDirection.z * thrust);
+                applyVelocity(player, next);
 
-            if (wallBreakEligible && WallBreakSupport.isInstalled(player)) {
-                WallBreakSupport.Outcome foresight = WallBreakSupport.clearSweptPath(level, player, next);
-                if (foresight == WallBreakSupport.Outcome.HIT_UNBREAKABLE) {
+                if (wallBreakActive && hitsUnbreakableAhead(player, next)) {
+                    emitEndParticles(player.position());
+                    return true;
+                }
+            } else {
+                // 破壁资格下的空气滑行：跟随实体阻力，扫掠用当前飞行速度
+                if (!player.horizontalCollision) {
+                    lastAppliedVelocity = player.getDeltaMovement();
+                }
+                if (hitsUnbreakableAhead(player, flightHint(player))) {
                     emitEndParticles(player.position());
                     return true;
                 }
             }
 
             if (player.onGround()) {
-                player.setOnGround(false);
+                if (insideWallBreak || !hasLeftGround) {
+                    // 墙内或尚未离地：抬离地面避免摩擦；已离地后的贴地由 shouldEnd 按落地处理
+                    player.setOnGround(false);
+                }
+            } else {
+                hasLeftGround = true;
             }
             player.resetFallDistance();
             player.hurtMarked = true;
@@ -263,36 +294,99 @@ public final class BoosterMotionTicker {
             return false;
         }
 
+        private boolean shouldEndWallBreakEligibility(ServerPlayer player) {
+            if (insideWallBreak) {
+                return false;
+            }
+            if (!hasLeftGround) {
+                return false;
+            }
+            // 落地：结束破壁资格（与速度耗尽为或关系）
+            if (player.onGround()) {
+                return true;
+            }
+            Vec3 motion = player.horizontalCollision ? lastAppliedVelocity : player.getDeltaMovement();
+            double along = motion.dot(fallbackDirection);
+            return along < WALL_BREAK_SPEED_EXHAUSTED;
+        }
+
+        private boolean hitsUnbreakableAhead(ServerPlayer player, Vec3 motion) {
+            WallBreakSupport.Outcome foresight = WallBreakSupport.clearSweptPath(level, player, motion);
+            return foresight == WallBreakSupport.Outcome.HIT_UNBREAKABLE;
+        }
+
         /**
          * @return true 若破壁路径撞上不可破坏方块，应结束推进
          */
         private boolean handleWallBreak(ServerPlayer player) {
-            Vec3 hint = lastAppliedVelocity;
-            if (hint.lengthSqr() < 1.0e-6) {
-                hint = fallbackDirection;
-            }
-            // 水平碰撞后速度常被清零：至少沿原推进方向探测一格，避免扫掠退化
-            if (player.horizontalCollision && hint.lengthSqr() < 1.0) {
-                Vec3 dir = hint.lengthSqr() < 1.0e-6 ? fallbackDirection : hint.normalize();
-                hint = dir.scale(1.0);
-            }
+            Vec3 flight = flightVelocity(player);
+            Vec3 sweepHint = sweepHint(flight, player.horizontalCollision);
 
-            WallBreakSupport.Outcome outcome = WallBreakSupport.clearSweptPath(level, player, hint);
+            WallBreakSupport.Outcome outcome = WallBreakSupport.clearSweptPath(level, player, sweepHint);
             if (outcome == WallBreakSupport.Outcome.HIT_UNBREAKABLE) {
+                insideWallBreak = false;
                 return true;
             }
-            if (outcome == WallBreakSupport.Outcome.CLEARED || player.horizontalCollision) {
-                if (outcome == WallBreakSupport.Outcome.CLEARED) {
-                    applyVelocity(player, lastAppliedVelocity.lengthSqr() > 1.0e-6
-                            ? lastAppliedVelocity
-                            : hint);
-                    player.horizontalCollision = false;
-                } else if (player.horizontalCollision) {
-                    // 仍有水平碰撞但未清到方块：按原规则结束
-                    return true;
+            if (outcome == WallBreakSupport.Outcome.CLEARED) {
+                if (!insideWallBreak) {
+                    // 保速用真实飞行速度，不用扫掠补长后的 hint
+                    wallEntryVelocity = captureForwardVelocity(flight);
+                    insideWallBreak = true;
                 }
+                applyVelocity(player, wallEntryVelocity);
+                player.horizontalCollision = false;
+                return false;
+            }
+
+            if (insideWallBreak) {
+                // 本 tick 未破坏且无水平碰撞：视为已离开连续墙体，停止保速
+                if (player.horizontalCollision) {
+                    applyVelocity(player, wallEntryVelocity);
+                    player.horizontalCollision = false;
+                } else {
+                    insideWallBreak = false;
+                }
+            } else if (player.horizontalCollision) {
+                // 仍有水平碰撞但未清到方块：按原规则结束
+                return true;
             }
             return false;
+        }
+
+        private Vec3 flightVelocity(ServerPlayer player) {
+            Vec3 motion = lastAppliedVelocity;
+            if (!player.horizontalCollision && player.getDeltaMovement().lengthSqr() > 1.0e-6) {
+                motion = player.getDeltaMovement();
+            }
+            if (motion.lengthSqr() < 1.0e-6) {
+                motion = fallbackDirection;
+            }
+            return motion;
+        }
+
+        /** 扫掠用：碰撞后速度常被清零时至少沿方向探测一格，避免漏清。 */
+        private Vec3 sweepHint(Vec3 flight, boolean horizontalCollision) {
+            if (horizontalCollision && flight.lengthSqr() < 1.0) {
+                Vec3 dir = flight.lengthSqr() < 1.0e-6 ? fallbackDirection : flight.normalize();
+                return dir.scale(1.0);
+            }
+            return flight;
+        }
+
+        /** 记录进入墙体时的前向速度，剥离起跳踢腿等无关竖直分量。 */
+        private Vec3 captureForwardVelocity(Vec3 hint) {
+            Vec3 forward = fallbackDirection.lengthSqr() > 1.0e-6
+                    ? fallbackDirection.normalize()
+                    : (hint.lengthSqr() > 1.0e-6 ? hint.normalize() : new Vec3(0.0, 0.0, 1.0));
+            double along = hint.dot(forward);
+            if (along < 0.05) {
+                along = Math.max(0.05, Math.sqrt(hint.x * hint.x + hint.z * hint.z));
+            }
+            return forward.scale(along);
+        }
+
+        private Vec3 flightHint(ServerPlayer player) {
+            return sweepHint(flightVelocity(player), player.horizontalCollision);
         }
 
         private void applyVelocity(ServerPlayer player, Vec3 velocity) {
