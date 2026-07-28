@@ -10,7 +10,7 @@ import net.minecraft.world.damagesource.DamageSource;
 /**
  * GameTest 用可受伤 FakePlayer：原版 Fabric FakePlayer 对一切伤害无敌。
  */
-public final class VulnerableFakePlayer extends FakePlayer {
+public class VulnerableFakePlayer extends FakePlayer {
     public VulnerableFakePlayer(ServerLevel world, GameProfile profile) {
         super(world, profile);
         this.getAbilities().invulnerable = false;
