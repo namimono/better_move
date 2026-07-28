@@ -9,7 +9,9 @@ public enum BoosterUpgradeType {
     /** 推进破击：推进中主动近战命中才触发，非碰撞冲撞。 */
     BOOST_STRIKE("boost_strike_upgrade"),
     /** 过载蓄力：按住蓄力松开释放，过载推进可触发过载爆炸。 */
-    CHARGE("charge_upgrade");
+    CHARGE("charge_upgrade"),
+    /** 破壁升级项：推进可进入破壁推进，沿飞行路径破坏可破坏阻挡物。 */
+    WALL_BREAK("wall_break_upgrade");
 
     private final String itemId;
 

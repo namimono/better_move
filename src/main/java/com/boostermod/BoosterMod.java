@@ -72,6 +72,8 @@ public class BoosterMod implements ModInitializer {
             registerUpgrade("boost_strike_upgrade", BoosterUpgradeType.BOOST_STRIKE);
     public static final Item CHARGE_UPGRADE =
             registerUpgrade("charge_upgrade", BoosterUpgradeType.CHARGE);
+    public static final Item WALL_BREAK_UPGRADE =
+            registerUpgrade("wall_break_upgrade", BoosterUpgradeType.WALL_BREAK);
 
     public static final MenuType<BoosterUpgradeMenu> BOOSTER_UPGRADE_MENU = Registry.register(
             BuiltInRegistries.MENU,
@@ -104,6 +106,7 @@ public class BoosterMod implements ModInitializer {
                             output.accept(RANDOM_IMPULSE_UPGRADE);
                             output.accept(BOOST_STRIKE_UPGRADE);
                             output.accept(CHARGE_UPGRADE);
+                            output.accept(WALL_BREAK_UPGRADE);
                         })
                         .build()
         );
