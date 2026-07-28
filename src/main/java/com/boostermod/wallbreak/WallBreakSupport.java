@@ -46,8 +46,32 @@ public final class WallBreakSupport {
      * 扫掠范围内若存在不可破坏方块，则不破坏任何方块并返回 {@link Outcome#HIT_UNBREAKABLE}。
      */
     public static Outcome clearSweptPath(ServerLevel level, ServerPlayer player, Vec3 motionHint) {
-        if (motionHint.lengthSqr() < 1.0e-10) {
+        SweepResult sweep = sweep(level, player, motionHint);
+        if (sweep == null) {
             return Outcome.NONE;
+        }
+        if (sweep.hitUnbreakable()) {
+            return Outcome.HIT_UNBREAKABLE;
+        }
+
+        for (BlockPos pos : sweep.toBreak()) {
+            breakWithBaseDrops(level, player, pos);
+        }
+
+        return sweep.toBreak().isEmpty() ? Outcome.NONE : Outcome.CLEARED;
+    }
+
+    /**
+     * 扫掠范围内是否仍有碰撞阻挡（可破坏或不可破坏），用于判断是否仍处于连续墙体中。
+     */
+    public static boolean hasObstructionInSweep(ServerLevel level, ServerPlayer player, Vec3 motionHint) {
+        SweepResult sweep = sweep(level, player, motionHint);
+        return sweep != null && (sweep.hitUnbreakable() || !sweep.toBreak().isEmpty());
+    }
+
+    private static SweepResult sweep(ServerLevel level, ServerPlayer player, Vec3 motionHint) {
+        if (motionHint.lengthSqr() < 1.0e-10) {
+            return null;
         }
 
         AABB swept = player.getBoundingBox().deflate(1.0e-3).expandTowards(motionHint);
@@ -86,16 +110,10 @@ public final class WallBreakSupport {
             }
         }
 
-        if (hitUnbreakable) {
-            return Outcome.HIT_UNBREAKABLE;
-        }
-
-        for (BlockPos pos : toBreak) {
-            breakWithBaseDrops(level, player, pos);
-        }
-
-        return toBreak.isEmpty() ? Outcome.NONE : Outcome.CLEARED;
+        return new SweepResult(toBreak, hitUnbreakable);
     }
+
+    private record SweepResult(List<BlockPos> toBreak, boolean hitUnbreakable) {}
 
     private static void breakWithBaseDrops(ServerLevel level, ServerPlayer player, BlockPos pos) {
         BlockState state = level.getBlockState(pos);
