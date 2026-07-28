@@ -3,6 +3,8 @@ package com.boostermod.gametest;
 import com.boostermod.BoosterMod;
 import com.boostermod.item.BoosterLeggingsItem;
 import com.boostermod.villager.ArmedVillagerCombat;
+import com.boostermod.villager.ArmedVillagerSettings;
+import com.boostermod.villager.ArmedVillagerTargetMode;
 import com.mojang.authlib.GameProfile;
 import java.util.List;
 import java.util.UUID;
@@ -15,6 +17,8 @@ import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.Difficulty;
 import net.minecraft.world.entity.EntityType;
 import net.minecraft.world.entity.EquipmentSlot;
+import net.minecraft.world.entity.monster.Monster;
+import net.minecraft.world.entity.monster.Zombie;
 import net.minecraft.world.entity.npc.Villager;
 import net.minecraft.world.entity.npc.VillagerProfession;
 import net.minecraft.world.entity.player.Player;
@@ -89,6 +93,7 @@ public class ArmedVillagerEngagementGameTest {
 
     @GameTest(template = FabricGameTest.EMPTY_STRUCTURE, batch = "armedEngagement_peaceful", timeoutTicks = TIMEOUT)
     public void peacefulDifficultyDoesNotEngage(GameTestHelper helper) {
+        setTargetMode(helper, ArmedVillagerTargetMode.PLAYERS);
         helper.getLevel().getServer().setDifficulty(Difficulty.PEACEFUL, true);
         prepareNearArena(helper);
         Villager villager = spawnArmedVillager(helper, VILLAGER_POS);
@@ -269,6 +274,61 @@ public class ArmedVillagerEngagementGameTest {
                 .thenSucceed();
     }
 
+    // 使用 zz_ 前缀批次，避免在 defaultBatch 装备拾取用例之前留下怪物/模式污染。
+    @GameTest(template = FabricGameTest.EMPTY_STRUCTURE, batch = "zz_armedEngagement_monsterMode", timeoutTicks = TIMEOUT)
+    public void monstersModeLocksNearestVisibleMonster(GameTestHelper helper) {
+        ensureHostileDifficulty(helper);
+        setTargetMode(helper, ArmedVillagerTargetMode.MONSTERS);
+        prepareNearArena(helper);
+        Villager villager = spawnArmedVillager(helper, VILLAGER_POS);
+        Zombie near = spawnMonster(helper, new BlockPos(3, 1, 5));
+        Zombie far = spawnMonster(helper, new BlockPos(5, 1, 5));
+        spawnAttackablePlayer(helper, new BlockPos(1, 1, 5), "ignored-player");
+
+        helper.startSequence()
+                .thenWaitUntil(() -> {
+                    helper.assertTrue(villager.getTarget() == near, "怪物模式应锁最近可见怪物");
+                    helper.assertTrue(villager.getTarget() != far, "不得锁更远的怪物");
+                    helper.assertTrue(!(villager.getTarget() instanceof Player), "怪物模式不得锁玩家");
+                })
+                .thenExecute(() -> cleanupMonsterModeFixture(helper))
+                .thenSucceed();
+    }
+
+    @GameTest(template = FabricGameTest.EMPTY_STRUCTURE, batch = "zz_armedEngagement_playersIgnoreMonster", timeoutTicks = TIMEOUT)
+    public void playersModeIgnoresMonsters(GameTestHelper helper) {
+        ensureHostileDifficulty(helper);
+        setTargetMode(helper, ArmedVillagerTargetMode.PLAYERS);
+        prepareNearArena(helper);
+        Villager villager = spawnArmedVillager(helper, VILLAGER_POS);
+        spawnMonster(helper, new BlockPos(3, 1, 5));
+
+        helper.startSequence()
+                .thenIdle(40)
+                .thenExecute(() -> {
+                    helper.assertTrue(villager.getTarget() == null, "玩家模式不得锁怪物");
+                    cleanupMonsterModeFixture(helper);
+                })
+                .thenSucceed();
+    }
+
+    @GameTest(template = FabricGameTest.EMPTY_STRUCTURE, batch = "zz_armedEngagement_modeSwitch", timeoutTicks = TIMEOUT)
+    public void switchingTargetModeDropsIncompatibleEngagement(GameTestHelper helper) {
+        ensureHostileDifficulty(helper);
+        setTargetMode(helper, ArmedVillagerTargetMode.PLAYERS);
+        prepareNearArena(helper);
+        Villager villager = spawnArmedVillager(helper, VILLAGER_POS);
+        Player player = spawnAttackablePlayer(helper, new BlockPos(3, 1, 5), "mode-switch");
+        Zombie zombie = spawnMonster(helper, new BlockPos(5, 1, 5));
+
+        helper.startSequence()
+                .thenWaitUntil(() -> helper.assertTrue(villager.getTarget() == player, "玩家模式应先锁玩家"))
+                .thenExecute(() -> setTargetMode(helper, ArmedVillagerTargetMode.MONSTERS))
+                .thenWaitUntil(() -> helper.assertTrue(villager.getTarget() == zombie, "切换为怪物模式后应改锁怪物"))
+                .thenExecute(() -> cleanupMonsterModeFixture(helper))
+                .thenSucceed();
+    }
+
     /** 结构内近距离场地：铺石板并清出活动空间。 */
     private static void prepareNearArena(GameTestHelper helper) {
         clearLingeringFakePlayers(helper);
@@ -313,6 +373,32 @@ public class ArmedVillagerEngagementGameTest {
 
     private static void ensureHostileDifficulty(GameTestHelper helper) {
         helper.getLevel().getServer().setDifficulty(Difficulty.EASY, true);
+        setTargetMode(helper, ArmedVillagerTargetMode.PLAYERS);
+    }
+
+    private static void setTargetMode(GameTestHelper helper, ArmedVillagerTargetMode mode) {
+        var server = helper.getLevel().getServer();
+        ArmedVillagerSettings settings = ArmedVillagerSettings.get(server);
+        if (settings.setTargetMode(mode)) {
+            ArmedVillagerCombat.clearAllEngagements(server);
+        }
+    }
+
+    private static void cleanupMonsterModeFixture(GameTestHelper helper) {
+        AABB box = helper.getBounds().inflate(64.0);
+        for (Monster monster : List.copyOf(helper.getLevel().getEntitiesOfClass(Monster.class, box))) {
+            monster.discard();
+        }
+        clearLingeringFakePlayers(helper);
+        setTargetMode(helper, ArmedVillagerTargetMode.PLAYERS);
+        helper.getLevel().getServer().setDifficulty(Difficulty.EASY, true);
+    }
+
+    private static Zombie spawnMonster(GameTestHelper helper, BlockPos relative) {
+        Zombie zombie = helper.spawn(EntityType.ZOMBIE, relative);
+        zombie.setHealth(20.0F);
+        helper.assertTrue(ArmedVillagerCombat.isAttackableMonster(zombie), "测试怪物应可攻击");
+        return zombie;
     }
 
     private static Villager spawnArmedVillager(GameTestHelper helper, BlockPos relative) {

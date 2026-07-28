@@ -6,6 +6,8 @@ import com.boostermod.upgrade.BoosterUpgradeHelper;
 import com.boostermod.upgrade.BoosterUpgradeType;
 import com.boostermod.villager.ArmedVillagerCombat;
 import com.boostermod.villager.ArmedVillagerEquipment;
+import com.boostermod.villager.ArmedVillagerSettings;
+import com.boostermod.villager.ArmedVillagerTargetMode;
 import com.boostermod.villager.VillagerBoostRunner;
 import com.mojang.authlib.GameProfile;
 import java.util.List;
@@ -508,7 +510,12 @@ public class ArmedVillagerBoostBoundaryGameTest {
     }
 
     private static void ensureCombatDifficulty(GameTestHelper helper) {
-        helper.getLevel().getServer().setDifficulty(Difficulty.NORMAL, true);
+        var server = helper.getLevel().getServer();
+        server.setDifficulty(Difficulty.NORMAL, true);
+        ArmedVillagerSettings settings = ArmedVillagerSettings.get(server);
+        if (settings.setTargetMode(ArmedVillagerTargetMode.PLAYERS)) {
+            ArmedVillagerCombat.clearAllEngagements(server);
+        }
     }
 
     private static void prepareNearArena(GameTestHelper helper) {

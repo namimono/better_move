@@ -1,13 +1,16 @@
 package com.boostermod.villager;
 
 import java.util.Comparator;
+import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
+import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.Difficulty;
 import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.entity.ai.navigation.PathNavigation;
+import net.minecraft.world.entity.monster.Monster;
 import net.minecraft.world.entity.npc.Villager;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.level.Level;
@@ -15,6 +18,7 @@ import net.minecraft.world.phys.AABB;
 
 /**
  * 武装村民交战控制：锁敌、追击、脱离；交战时临时接管导航并压制普通日程。
+ * 锁敌目标类型由 {@link ArmedVillagerSettings} 配置（玩家 / 怪物）。
  */
 public final class ArmedVillagerCombat {
     public static final double LOCK_RANGE = 32.0;
@@ -60,7 +64,7 @@ public final class ArmedVillagerCombat {
             return true;
         }
 
-        Player target = findLockTarget(villager, serverLevel);
+        LivingEntity target = findLockTarget(villager, serverLevel);
         if (target == null) {
             return false;
         }
@@ -83,7 +87,27 @@ public final class ArmedVillagerCombat {
         }
     }
 
-    private static void tickCombatActions(Villager villager, Player target) {
+    /** 切换锁敌模式等场景：清空全部进行中的交战。 */
+    public static void clearAllEngagements(MinecraftServer server) {
+        for (UUID id : List.copyOf(ENGAGEMENTS.keySet())) {
+            Villager villager = null;
+            for (ServerLevel level : server.getAllLevels()) {
+                if (level.getEntity(id) instanceof Villager found) {
+                    villager = found;
+                    break;
+                }
+            }
+            if (villager != null) {
+                clearEngagement(villager);
+            } else {
+                ENGAGEMENTS.remove(id);
+            }
+        }
+        ArmedVillagerMelee.clearAll();
+        VillagerBoostRunner.clearAll(server);
+    }
+
+    private static void tickCombatActions(Villager villager, LivingEntity target) {
         ArmedVillagerMelee.tickAttack(villager, target);
         if (!VillagerBoostRunner.isBoosting(villager)) {
             VillagerBoostRunner.tryStartBoost(villager, target);
@@ -107,7 +131,25 @@ public final class ArmedVillagerCombat {
         return player.canBeSeenAsEnemy();
     }
 
-    private static void beginEngagement(Villager villager, Player target) {
+    public static boolean isAttackableMonster(LivingEntity entity) {
+        if (!(entity instanceof Monster)) {
+            return false;
+        }
+        if (!entity.isAlive() || entity.isRemoved() || entity.getHealth() <= 0.0F) {
+            return false;
+        }
+        return true;
+    }
+
+    /** 按当前服务端配置判断实体是否可作为锁敌目标。 */
+    public static boolean isAttackableTarget(LivingEntity entity, ArmedVillagerTargetMode mode) {
+        return switch (mode) {
+            case PLAYERS -> entity instanceof Player player && isAttackablePlayer(player);
+            case MONSTERS -> isAttackableMonster(entity);
+        };
+    }
+
+    private static void beginEngagement(Villager villager, LivingEntity target) {
         interruptSchedule(villager);
         villager.setTarget(target);
         ENGAGEMENTS.put(
@@ -116,8 +158,9 @@ public final class ArmedVillagerCombat {
     }
 
     private static boolean maintainEngagement(Villager villager, ServerLevel level, Engagement engagement) {
-        Player target = engagement.target();
-        if (!isAttackablePlayer(target) || target.level() != level) {
+        LivingEntity target = engagement.target();
+        ArmedVillagerTargetMode mode = ArmedVillagerSettings.get(level.getServer()).getTargetMode();
+        if (!isAttackableTarget(target, mode) || target.level() != level) {
             return false;
         }
 
@@ -145,13 +188,24 @@ public final class ArmedVillagerCombat {
         return true;
     }
 
-    private static Player findLockTarget(Villager villager, ServerLevel level) {
+    private static LivingEntity findLockTarget(Villager villager, ServerLevel level) {
+        ArmedVillagerTargetMode mode = ArmedVillagerSettings.get(level.getServer()).getTargetMode();
         AABB box = villager.getBoundingBox().inflate(LOCK_RANGE);
-        return level.getEntitiesOfClass(Player.class, box, ArmedVillagerCombat::isAttackablePlayer).stream()
-                .filter(player -> villager.distanceTo(player) <= LOCK_RANGE)
-                .filter(villager::hasLineOfSight)
-                .min(Comparator.comparingDouble(villager::distanceTo))
-                .orElse(null);
+        return switch (mode) {
+            case PLAYERS -> level.getEntitiesOfClass(Player.class, box, ArmedVillagerCombat::isAttackablePlayer).stream()
+                    .filter(player -> villager.distanceTo(player) <= LOCK_RANGE)
+                    .filter(villager::hasLineOfSight)
+                    .min(Comparator.comparingDouble(villager::distanceTo))
+                    .map(LivingEntity.class::cast)
+                    .orElse(null);
+            case MONSTERS -> level.getEntitiesOfClass(Monster.class, box, ArmedVillagerCombat::isAttackableMonster)
+                    .stream()
+                    .filter(monster -> villager.distanceTo(monster) <= LOCK_RANGE)
+                    .filter(villager::hasLineOfSight)
+                    .min(Comparator.comparingDouble(villager::distanceTo))
+                    .map(LivingEntity.class::cast)
+                    .orElse(null);
+        };
     }
 
     private static void chase(Villager villager, LivingEntity target) {
@@ -175,5 +229,5 @@ public final class ArmedVillagerCombat {
         }
     }
 
-    private record Engagement(Player target, int lostApproachTicks, double lastDistance) {}
+    private record Engagement(LivingEntity target, int lostApproachTicks, double lastDistance) {}
 }

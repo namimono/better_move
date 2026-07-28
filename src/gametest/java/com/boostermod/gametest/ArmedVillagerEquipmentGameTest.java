@@ -12,6 +12,7 @@ import net.minecraft.gametest.framework.GameTest;
 import net.minecraft.gametest.framework.GameTestHelper;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.SimpleContainer;
+import net.minecraft.world.Difficulty;
 import net.minecraft.world.entity.EntityType;
 import net.minecraft.world.entity.EquipmentSlot;
 import net.minecraft.world.entity.item.ItemEntity;
@@ -152,18 +153,23 @@ public class ArmedVillagerEquipmentGameTest {
         Villager villager = spawnAdultVillager(helper, VillagerProfession.NONE);
         villager.setItemSlot(EquipmentSlot.LEGS, new ItemStack(BoosterMod.BOOSTER_LEGGINGS_COPPER));
         ServerLevel level = helper.getLevel();
+        boolean previous = level.getGameRules().getBoolean(GameRules.RULE_MOBGRIEFING);
         level.getGameRules().getRule(GameRules.RULE_MOBGRIEFING).set(false, level.getServer());
         spawnGroundItem(helper, new ItemStack(Items.IRON_SWORD));
 
         helper.runAfterDelay(40, () -> {
-            helper.assertTrue(
-                    villager.getItemBySlot(EquipmentSlot.LEGS).is(BoosterMod.BOOSTER_LEGGINGS_COPPER),
-                    "关闭 mobGriefing 不得卸下已有装备");
-            helper.assertTrue(
-                    villager.getItemBySlot(EquipmentSlot.MAINHAND).isEmpty(),
-                    "关闭 mobGriefing 禁止新拾取剑");
-            helper.assertTrue(groundItemCount(helper, Items.IRON_SWORD) >= 1, "地面剑应保留");
-            helper.succeed();
+            try {
+                helper.assertTrue(
+                        villager.getItemBySlot(EquipmentSlot.LEGS).is(BoosterMod.BOOSTER_LEGGINGS_COPPER),
+                        "关闭 mobGriefing 不得卸下已有装备");
+                helper.assertTrue(
+                        villager.getItemBySlot(EquipmentSlot.MAINHAND).isEmpty(),
+                        "关闭 mobGriefing 禁止新拾取剑");
+                helper.assertTrue(groundItemCount(helper, Items.IRON_SWORD) >= 1, "地面剑应保留");
+                helper.succeed();
+            } finally {
+                level.getGameRules().getRule(GameRules.RULE_MOBGRIEFING).set(previous, level.getServer());
+            }
         });
     }
 
@@ -270,6 +276,10 @@ public class ArmedVillagerEquipmentGameTest {
     }
 
     private static void preparePlatform(GameTestHelper helper) {
+        // 重置可能被其它批次污染的全局状态（难度 / mobGriefing）。
+        ServerLevel level = helper.getLevel();
+        level.getServer().setDifficulty(Difficulty.EASY, true);
+        level.getGameRules().getRule(GameRules.RULE_MOBGRIEFING).set(true, level.getServer());
         for (int x = 1; x <= 5; x++) {
             for (int z = 1; z <= 5; z++) {
                 helper.setBlock(new BlockPos(x, 1, z), Blocks.STONE);

@@ -4,6 +4,7 @@ import com.boostermod.balance.BoosterBalanceManager;
 import com.boostermod.balance.BoosterBalanceProfile;
 import com.boostermod.item.BoosterLeggingsItem;
 import java.util.Iterator;
+import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
@@ -45,6 +46,19 @@ public final class VillagerBoostRunner {
             stopBoost(villager, removed);
         }
         // 冷却挂在村民 UUID 上，脱离交战不重置。
+    }
+
+    /** 停止全部进行中的村民推进（切换锁敌模式等）；不重置冷却。 */
+    public static void clearAll(MinecraftServer server) {
+        for (Map.Entry<UUID, ActiveBoost> entry : List.copyOf(ACTIVE.entrySet())) {
+            ActiveBoost boost = entry.getValue();
+            Villager villager = findVillager(server, entry.getKey(), boost.level);
+            if (villager != null) {
+                clear(villager);
+            } else {
+                ACTIVE.remove(entry.getKey());
+            }
+        }
     }
 
     public static void tickServer(MinecraftServer server) {

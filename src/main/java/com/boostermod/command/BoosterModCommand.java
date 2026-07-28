@@ -8,6 +8,9 @@ import com.boostermod.combat.BoostStrikeHandler;
 import com.boostermod.feedback.BoosterShakeSettings;
 import com.boostermod.hud.BoosterHudSettings;
 import com.boostermod.tier.BoosterTier;
+import com.boostermod.villager.ArmedVillagerCombat;
+import com.boostermod.villager.ArmedVillagerSettings;
+import com.boostermod.villager.ArmedVillagerTargetMode;
 import com.mojang.brigadier.CommandDispatcher;
 import com.mojang.brigadier.arguments.DoubleArgumentType;
 import com.mojang.brigadier.arguments.StringArgumentType;
@@ -30,6 +33,10 @@ public final class BoosterModCommand {
             new DynamicCommandExceptionType(value -> Component.literal("Unknown booster tier: " + value));
     private static final DynamicCommandExceptionType UNKNOWN_FIELD =
             new DynamicCommandExceptionType(value -> Component.literal("Unknown balance field: " + value));
+    private static final DynamicCommandExceptionType UNKNOWN_TARGET_MODE =
+            new DynamicCommandExceptionType(
+                    value -> Component.literal("Unknown armed villager target mode: " + value
+                            + " (expected players or monsters)"));
 
     private BoosterModCommand() {}
 
@@ -88,7 +95,15 @@ public final class BoosterModCommand {
                                         .suggests(BoosterModCommand::suggestTiers)
                                         .executes(context -> resetTier(context, readTier(context)))))
                         .then(Commands.literal("reload")
-                                .executes(BoosterModCommand::reload))));
+                                .executes(BoosterModCommand::reload)))
+                .then(Commands.literal("armed")
+                        .then(Commands.literal("target")
+                                .executes(BoosterModCommand::armedTargetStatus)
+                                .then(Commands.literal("status")
+                                        .executes(BoosterModCommand::armedTargetStatus))
+                                .then(Commands.argument("mode", StringArgumentType.word())
+                                        .suggests(BoosterModCommand::suggestTargetModes)
+                                        .executes(BoosterModCommand::setArmedTargetMode)))));
     }
 
     private static int showAll(CommandContext<CommandSourceStack> context) {
@@ -140,6 +155,46 @@ public final class BoosterModCommand {
             sendProfile(context.getSource(), tier, manager.getProfile(tier));
         }
         return 1;
+    }
+
+    private static int armedTargetStatus(CommandContext<CommandSourceStack> context) {
+        ArmedVillagerTargetMode mode =
+                ArmedVillagerSettings.get(context.getSource().getServer()).getTargetMode();
+        context.getSource().sendSuccess(
+                () -> Component.literal("Armed villager target mode is currently: " + mode.getId() + "."),
+                false);
+        return 1;
+    }
+
+    private static int setArmedTargetMode(CommandContext<CommandSourceStack> context) throws CommandSyntaxException {
+        ArmedVillagerTargetMode mode = readTargetMode(context);
+        var server = context.getSource().getServer();
+        ArmedVillagerSettings settings = ArmedVillagerSettings.get(server);
+        boolean changed = settings.setTargetMode(mode);
+        if (changed) {
+            ArmedVillagerCombat.clearAllEngagements(server);
+        }
+        context.getSource().sendSuccess(
+                () -> Component.literal(
+                        "Armed villager target mode set to "
+                                + mode.getId()
+                                + (changed ? "." : " (unchanged).")),
+                true);
+        return 1;
+    }
+
+    private static ArmedVillagerTargetMode readTargetMode(CommandContext<CommandSourceStack> context)
+            throws CommandSyntaxException {
+        String raw = StringArgumentType.getString(context, "mode");
+        return ArmedVillagerTargetMode.byId(raw).orElseThrow(() -> UNKNOWN_TARGET_MODE.create(raw));
+    }
+
+    private static CompletableFuture<Suggestions> suggestTargetModes(
+            CommandContext<CommandSourceStack> context, SuggestionsBuilder builder) {
+        for (ArmedVillagerTargetMode mode : ArmedVillagerTargetMode.values()) {
+            builder.suggest(mode.getId());
+        }
+        return builder.buildFuture();
     }
 
     private static int hudStatus(CommandContext<CommandSourceStack> context) {

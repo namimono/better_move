@@ -23,6 +23,10 @@ public final class ArmedVillagerMelee {
         LAST_ATTACK_GAME_TIME.remove(villager.getUUID());
     }
 
+    public static void clearAll() {
+        LAST_ATTACK_GAME_TIME.clear();
+    }
+
     /**
      * 在交战 tick 中尝试村民剑击。
      *
