@@ -49,13 +49,19 @@ public final class WallBreakSupport {
     }
 
     /**
-     * 生存/冒险模式直接扣除固定生命值，不受护甲、抗性效果或受伤无敌帧影响；可致死。
-     * 创造/旁观不改变真实生命值（可见反馈由后续 issue 补齐）。
+     * 生存/冒险：直接扣除固定生命值（绕过护甲、抗性、受伤无敌帧），可致死。
+     * 创造：不改变真实生命值，仍按同节奏触发受伤动画、音效与屏幕受击反馈（非先扣再回）。
+     * 旁观：无代价、无反馈。
      *
      * @return {@code true} 若代价后玩家已死亡
      */
     public static boolean applyHealthCost(ServerPlayer player) {
-        if (player.isCreative() || player.isSpectator()) {
+        if (player.isSpectator()) {
+            return false;
+        }
+        if (player.isCreative()) {
+            // 仅反馈：不得改生命，也不得先扣再回
+            playHurtFeedback(player);
             return false;
         }
         // 直接改生命值：绕过护甲、抗性与 hurt 无敌帧
@@ -69,9 +75,19 @@ public final class WallBreakSupport {
         } else {
             player.setHealth(next);
         }
-        player.hurtDuration = 10;
-        player.hurtTime = 10;
+        playHurtFeedback(player);
+        return !player.isAlive() || player.isDeadOrDying() || player.getHealth() <= 0.0f;
+    }
+
+    /**
+     * 与生存同节奏的受伤可见/可听反馈：红闪动画、屏幕受击方向包、玩家受伤音效。
+     * 不改动生命值。
+     */
+    private static void playHurtFeedback(ServerPlayer player) {
+        player.animateHurt(0.0f);
         player.hurtMarked = true;
+        // 屏幕受击倾斜（真实客户端连接；FakePlayer 走空发送）
+        player.indicateDamage(0.0, 1.0);
         if (!player.level().isClientSide) {
             player.level().playSound(
                     null,
@@ -83,7 +99,6 @@ public final class WallBreakSupport {
                     1.0f,
                     1.0f);
         }
-        return !player.isAlive() || player.isDeadOrDying() || player.getHealth() <= 0.0f;
     }
 
     /**

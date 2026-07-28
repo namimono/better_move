@@ -758,6 +758,246 @@ public class WallBreakBoostGameTest {
                 .thenSucceed();
     }
 
+    // --- issue 05: 创造反馈与玩法边界 ---
+
+    @GameTest(template = FabricGameTest.EMPTY_STRUCTURE, batch = "wallBreak_creativeBoundary", timeoutTicks = TIMEOUT)
+    public void creativeWallBreakKeepsHealthAndPlaysHurtFeedback(GameTestHelper helper) {
+        prepareCorridor(helper, 7);
+        buildStoneWall(helper, 3);
+        ServerPlayer player = spawnBoostingPlayer(helper, new BlockPos(3, 1, 1), "wb-cre-fb", true);
+        player.setGameMode(GameType.CREATIVE);
+        player.setHealth(20.0F);
+        player.hurtTime = 0;
+        player.hurtDuration = 0;
+
+        helper.startSequence()
+                .thenExecute(() -> triggerForwardBoost(
+                        player, new com.boostermod.balance.BoosterBalanceProfile(1.20, 0.060, 6)))
+                .thenWaitUntil(() -> helper.assertTrue(
+                        player.getZ() > helper.absolutePos(new BlockPos(3, 1, 3)).getZ()
+                                && helper.getBlockState(new BlockPos(3, 1, 3)).is(Blocks.AIR),
+                        "创造模式也应能破壁"))
+                .thenExecute(() -> {
+                    helper.assertTrue(
+                            player.getHealth() == 20.0F,
+                            "创造破壁不得改变真实生命值, health=" + player.getHealth());
+                    helper.assertTrue(
+                            player.hurtTime > 0 && player.hurtDuration > 0,
+                            "创造破壁应触发受伤动画反馈, hurtTime="
+                                    + player.hurtTime
+                                    + " hurtDuration="
+                                    + player.hurtDuration);
+                })
+                .thenExecute(() -> cleanupPlayer(player))
+                .thenSucceed();
+    }
+
+    @GameTest(template = FabricGameTest.EMPTY_STRUCTURE, batch = "wallBreak_creativeBoundary", timeoutTicks = TIMEOUT)
+    public void creativeFeedbackRepeatsEveryTenClearTicksWithoutHpChange(GameTestHelper helper) {
+        prepareCorridor(helper, 7);
+        for (int z = 2; z <= 6; z++) {
+            buildStoneWall(helper, z);
+        }
+        ServerPlayer player = spawnBoostingPlayer(helper, new BlockPos(3, 1, 1), "wb-cre-int", true);
+        player.setGameMode(GameType.CREATIVE);
+        player.setHealth(20.0F);
+        player.hurtTime = 0;
+        player.hurtDuration = 0;
+        boolean[] sawSecondPulse = {false};
+
+        helper.startSequence()
+                .thenExecute(() -> triggerForwardBoost(
+                        player, new com.boostermod.balance.BoosterBalanceProfile(0.28, 0.0, 1)))
+                .thenWaitUntil(() -> helper.assertTrue(
+                        player.hurtTime > 0 && BoosterMotionTicker.isBoosting(player),
+                        "首次进入墙体应已有受伤反馈"))
+                .thenExecute(() -> {
+                    helper.assertTrue(
+                            player.getHealth() == 20.0F,
+                            "首次创造反馈后生命值仍为满, health=" + player.getHealth());
+                    // 清掉本段反馈，观察下一轮 10 清方 tick 是否再次置位
+                    player.hurtTime = 0;
+                    player.hurtDuration = 0;
+                })
+                .thenWaitUntil(() -> {
+                    if (player.hurtTime > 0 && player.getHealth() == 20.0F) {
+                        sawSecondPulse[0] = true;
+                    }
+                    helper.assertTrue(
+                            sawSecondPulse[0],
+                            "持续破壁累计 "
+                                    + WallBreakSupport.COST_INTERVAL_TICKS
+                                    + " 清方 tick 后应再次受伤反馈且生命不变, hurtTime="
+                                    + player.hurtTime
+                                    + " health="
+                                    + player.getHealth());
+                })
+                .thenExecute(() -> helper.assertTrue(
+                        player.getHealth() == 20.0F,
+                        "持续创造破壁全程生命值不变, health=" + player.getHealth()))
+                .thenExecute(() -> cleanupPlayer(player))
+                .thenSucceed();
+    }
+
+    @GameTest(template = FabricGameTest.EMPTY_STRUCTURE, batch = "wallBreak_creativeBoundary", timeoutTicks = TIMEOUT)
+    public void creativeFeedbackDoesNotFakeDamageThenHeal(GameTestHelper helper) {
+        prepareCorridor(helper, 7);
+        buildStoneWall(helper, 3);
+        ServerPlayer player = spawnBoostingPlayer(helper, new BlockPos(3, 1, 1), "wb-cre-no-fake", true);
+        player.setGameMode(GameType.CREATIVE);
+        player.setHealth(20.0F);
+
+        helper.startSequence()
+                .thenExecute(() -> triggerForwardBoost(
+                        player, new com.boostermod.balance.BoosterBalanceProfile(1.20, 0.060, 6)))
+                .thenWaitUntil(() -> helper.assertTrue(
+                        player.hurtTime > 0
+                                && player.getZ() > helper.absolutePos(new BlockPos(3, 1, 3)).getZ(),
+                        "应破壁并产生反馈"))
+                .thenExecute(() -> {
+                    helper.assertTrue(
+                            player.getHealth() == 20.0F,
+                            "创造反馈不得先扣血, health=" + player.getHealth());
+                    // 切回生存：若曾先扣再回，残留残血会暴露；正确实现应仍满血
+                    player.setGameMode(GameType.SURVIVAL);
+                    helper.assertTrue(
+                            player.getHealth() == 20.0F,
+                            "切回生存后生命值不得因创造假伤残留错误状态, health=" + player.getHealth());
+                })
+                .thenExecute(() -> cleanupPlayer(player))
+                .thenSucceed();
+    }
+
+    @GameTest(template = FabricGameTest.EMPTY_STRUCTURE, batch = "wallBreak_creativeBoundary", timeoutTicks = TIMEOUT)
+    public void wallBreakDoesNotExtraSpendDurabilityOrHunger(GameTestHelper helper) {
+        prepareCorridor(helper, 7);
+        for (int z = 2; z <= 5; z++) {
+            buildStoneWall(helper, z);
+        }
+        ServerPlayer player = spawnBoostingPlayer(helper, new BlockPos(3, 1, 1), "wb-res", true);
+        player.setHealth(20.0F);
+        player.getFoodData().setFoodLevel(20);
+        ItemStack legs = player.getItemBySlot(EquipmentSlot.LEGS);
+        int damageBefore = legs.getDamageValue();
+        float foodBefore = player.getFoodData().getFoodLevel();
+        float[] exhaustAfterStart = {Float.NaN};
+        int[] damageAfterStart = {-1};
+
+        helper.startSequence()
+                // 走完整推进入口，会结算一次耐久与饥饿
+                .thenExecute(() -> BoosterLeggingsItem.tryBoostFromKey(player, 0.0, 1.0, -1, -1))
+                .thenIdle(1)
+                .thenExecute(() -> {
+                    helper.assertTrue(
+                            BoosterMotionTicker.isBoosting(player),
+                            "应已发起推进");
+                    exhaustAfterStart[0] = player.getFoodData().getExhaustionLevel();
+                    damageAfterStart[0] = player.getItemBySlot(EquipmentSlot.LEGS).getDamageValue();
+                    helper.assertTrue(
+                            damageAfterStart[0] == damageBefore + 1,
+                            "推进开始应只消耗 1 点耐久, before="
+                                    + damageBefore
+                                    + " after="
+                                    + damageAfterStart[0]);
+                    helper.assertTrue(
+                            player.getFoodData().getFoodLevel() == foodBefore,
+                            "推进开始后饥饿值等级应不变（仅 exhaustion）");
+                })
+                .thenWaitUntil(() -> helper.assertTrue(
+                        player.getZ() > helper.absolutePos(new BlockPos(3, 1, 5)).getZ() + 0.3
+                                && helper.getBlockState(new BlockPos(3, 1, 5)).is(Blocks.AIR),
+                        "应打穿多格墙体"))
+                .thenExecute(() -> {
+                    int damageAfter = player.getItemBySlot(EquipmentSlot.LEGS).getDamageValue();
+                    float exhaustAfter = player.getFoodData().getExhaustionLevel();
+                    helper.assertTrue(
+                            damageAfter == damageAfterStart[0],
+                            "破壁清方不得额外消耗推进器耐久, start="
+                                    + damageAfterStart[0]
+                                    + " now="
+                                    + damageAfter);
+                    helper.assertTrue(
+                            exhaustAfter == exhaustAfterStart[0]
+                                    || Math.abs(exhaustAfter - exhaustAfterStart[0]) < 1.0e-4f,
+                            "破壁时长不得额外增加饥饿 exhaustion, start="
+                                    + exhaustAfterStart[0]
+                                    + " now="
+                                    + exhaustAfter);
+                    helper.assertTrue(
+                            player.getFoodData().getFoodLevel() == foodBefore,
+                            "破壁不得额外降低饥饿值等级");
+                })
+                .thenExecute(() -> cleanupPlayer(player))
+                .thenSucceed();
+    }
+
+    @GameTest(template = FabricGameTest.EMPTY_STRUCTURE, batch = "wallBreak_creativeBoundary", timeoutTicks = TIMEOUT)
+    public void wallBreakDoesNotDealBodyCollisionDamageToEntities(GameTestHelper helper) {
+        prepareCorridor(helper, 7);
+        buildStoneWall(helper, 3);
+        ServerPlayer player = spawnBoostingPlayer(helper, new BlockPos(3, 1, 1), "wb-ent", true);
+        // 墙后路径上的实体：破壁推进穿过时不得自动造成碰撞伤害
+        net.minecraft.world.entity.animal.Pig pig =
+                helper.spawn(EntityType.PIG, new BlockPos(3, 1, 5));
+        pig.setHealth(10.0F);
+        float pigHealthBefore = pig.getHealth();
+
+        helper.startSequence()
+                .thenExecute(() -> triggerForwardBoost(
+                        player, new com.boostermod.balance.BoosterBalanceProfile(1.20, 0.080, 8)))
+                .thenWaitUntil(() -> helper.assertTrue(
+                        player.getZ() > helper.absolutePos(new BlockPos(3, 1, 4)).getZ(),
+                        "玩家应突破墙体并到达实体附近"))
+                .thenIdle(6)
+                .thenExecute(() -> helper.assertTrue(
+                        pig.isAlive() && pig.getHealth() == pigHealthBefore,
+                        "普通破壁推进撞实体不得自动造成碰撞伤害, pigHealth="
+                                + pig.getHealth()
+                                + " before="
+                                + pigHealthBefore))
+                .thenExecute(() -> {
+                    pig.discard();
+                    cleanupPlayer(player);
+                })
+                .thenSucceed();
+    }
+
+    @GameTest(template = FabricGameTest.EMPTY_STRUCTURE, batch = "wallBreak_creativeBoundary", timeoutTicks = TIMEOUT)
+    public void overloadedBoostDoesNotEnableWallBreakHealthCost(GameTestHelper helper) {
+        prepareCorridor(helper, 7);
+        buildStoneWall(helper, 3);
+        ServerPlayer player = spawnBoostingPlayer(helper, new BlockPos(3, 1, 1), "wb-ovl", true);
+        player.setHealth(20.0F);
+
+        helper.startSequence()
+                .thenExecute(() -> {
+                    // 过载推进：规格未声明与破壁组合，不得走破壁清方/扣血分支
+                    Vec3 direction = new Vec3(0.0, 0.0, 1.0);
+                    BoosterMotionTicker.start(
+                            player.serverLevel(),
+                            player,
+                            direction,
+                            new com.boostermod.balance.BoosterBalanceProfile(1.20, 0.060, 6),
+                            player.getEyePosition(),
+                            player.getEyeY() - player.getY(),
+                            false,
+                            true,
+                            true);
+                })
+                .thenWaitUntil(() -> helper.assertTrue(
+                        !BoosterMotionTicker.isBoosting(player) || player.getHealth() < 20.0F,
+                        "过载推进应撞击结束或爆炸自伤"))
+                .thenExecute(() -> {
+                    float health = player.getHealth();
+                    // 破壁首次固定扣 1 → 19；过载自伤 4 → 16（或未结算前仍 20）。不得出现破壁代价。
+                    helper.assertTrue(
+                            Math.abs(health - 19.0F) > 0.01F,
+                            "过载路径不得启用破壁生命代价, health=" + health);
+                })
+                .thenExecute(() -> cleanupPlayer(player))
+                .thenSucceed();
+    }
+
     private static void prepareCorridor(GameTestHelper helper) {
         // fabric empty 结构为 8x8x8；超出结构的 setBlock 会写进邻近 GameTest 场地
         prepareCorridor(helper, 7);
