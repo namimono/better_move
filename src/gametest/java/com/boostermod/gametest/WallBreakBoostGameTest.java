@@ -104,10 +104,11 @@ public class WallBreakBoostGameTest {
     @GameTest(template = FabricGameTest.EMPTY_STRUCTURE, batch = "wallBreak_baseDrops", timeoutTicks = TIMEOUT)
     public void wallBreakProducesUnenchantedBaseDropsWithoutHeldTool(GameTestHelper helper) {
         prepareCorridor(helper);
+        // 仅中线放铁矿，侧墙用石头，便于按破坏格数核对基础掉落（每格铁矿固定 1 粗铁）
         for (int y = 1; y <= 3; y++) {
-            for (int x = 2; x <= 4; x++) {
-                helper.setBlock(new BlockPos(x, y, WALL_Z), Blocks.IRON_ORE);
-            }
+            helper.setBlock(new BlockPos(2, y, WALL_Z), Blocks.STONE);
+            helper.setBlock(new BlockPos(3, y, WALL_Z), Blocks.IRON_ORE);
+            helper.setBlock(new BlockPos(4, y, WALL_Z), Blocks.STONE);
         }
         ServerPlayer player = spawnBoostingPlayer(helper, PLAYER_POS, "wb-drops", true);
         ItemStack enchantedPick = new ItemStack(Items.DIAMOND_PICKAXE);
@@ -125,13 +126,21 @@ public class WallBreakBoostGameTest {
                         "应穿过铁矿墙"))
                 .thenExecute(() -> {
                     helper.assertBlockPresent(Blocks.AIR, new BlockPos(3, 1, WALL_Z));
+                    int brokenOres = 0;
+                    for (int y = 1; y <= 3; y++) {
+                        if (helper.getBlockState(new BlockPos(3, y, WALL_Z)).is(Blocks.AIR)) {
+                            brokenOres++;
+                        }
+                    }
                     int rawIron = countGroundItems(helper, Items.RAW_IRON);
                     int oreBlocks = countGroundItems(helper, Items.IRON_ORE);
+                    helper.assertTrue(brokenOres > 0, "应至少破坏一格铁矿");
                     helper.assertTrue(rawIron > 0, "铁矿应产生无附魔基础掉落（粗铁）");
                     helper.assertTrue(oreBlocks == 0, "不应应用精准采集，不得掉落矿石方块本身");
                     helper.assertTrue(
-                            rawIron <= 4,
-                            "不应应用时运，粗铁数量应接近无附魔基础掉落, rawIron=" + rawIron);
+                            rawIron == brokenOres,
+                            "不应应用时运：粗铁数应等于破坏的铁矿格数, rawIron="
+                                    + rawIron + " brokenOres=" + brokenOres);
                 })
                 .thenSucceed();
     }
