@@ -43,7 +43,7 @@ public final class WallBreakSupport {
 
     /**
      * 清除玩家碰撞体沿 {@code motionHint} 扫过的可破坏阻挡方块。
-     * 遇到不可破坏方块时仍会先清掉同扫掠内的可破坏方块，再返回 {@link Outcome#HIT_UNBREAKABLE}。
+     * 扫掠范围内若存在不可破坏方块，则不破坏任何方块并返回 {@link Outcome#HIT_UNBREAKABLE}。
      */
     public static Outcome clearSweptPath(ServerLevel level, ServerPlayer player, Vec3 motionHint) {
         if (motionHint.lengthSqr() < 1.0e-10) {
@@ -86,13 +86,14 @@ public final class WallBreakSupport {
             }
         }
 
+        if (hitUnbreakable) {
+            return Outcome.HIT_UNBREAKABLE;
+        }
+
         for (BlockPos pos : toBreak) {
             breakWithBaseDrops(level, player, pos);
         }
 
-        if (hitUnbreakable) {
-            return Outcome.HIT_UNBREAKABLE;
-        }
         return toBreak.isEmpty() ? Outcome.NONE : Outcome.CLEARED;
     }
 

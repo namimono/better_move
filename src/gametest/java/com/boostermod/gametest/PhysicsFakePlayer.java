@@ -7,7 +7,7 @@ import net.minecraft.world.phys.Vec3;
 
 /**
  * 会处理位移与碰撞的 FakePlayer，供推进 / 破壁 GameTest 观察外部世界状态。
- * Fabric 默认 {@code FakePlayer#tick} 为空，无法产生水平碰撞或穿墙位移。
+ * Fabric 默认 {@code FakePlayer#tick} 为空，无法产生水平碰撞或破壁所需位移。
  */
 public final class PhysicsFakePlayer extends VulnerableFakePlayer {
     private static final double AIR_DRAG_XZ = 0.91;

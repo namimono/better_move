@@ -50,10 +50,10 @@ public class WallBreakBoostGameTest {
                         "应成功发起推进"))
                 .thenWaitUntil(() -> helper.assertTrue(
                         !BoosterMotionTicker.isBoosting(player),
-                        "未安装破壁升级项时撞墙应结束推进"))
+                        "未安装破壁升级项时碰到水平墙体应结束推进"))
                 .thenExecute(() -> {
                     helper.assertTrue(player.getZ() < helper.absolutePos(new BlockPos(3, 1, WALL_Z + 1)).getZ() + 0.5,
-                            "未破壁时玩家不应穿过墙体");
+                            "未进入破壁推进时玩家不应穿过墙体");
                     helper.assertBlockPresent(Blocks.STONE, new BlockPos(3, 1, WALL_Z));
                     helper.assertBlockPresent(Blocks.STONE, new BlockPos(3, 2, WALL_Z));
                 })
@@ -110,13 +110,13 @@ public class WallBreakBoostGameTest {
             }
         }
         ServerPlayer player = spawnBoostingPlayer(helper, PLAYER_POS, "wb-drops", true);
-        ItemStack silkPick = new ItemStack(Items.DIAMOND_PICKAXE);
-        var silkTouch = helper.getLevel()
+        ItemStack enchantedPick = new ItemStack(Items.DIAMOND_PICKAXE);
+        var enchantments = helper.getLevel()
                 .registryAccess()
-                .lookupOrThrow(net.minecraft.core.registries.Registries.ENCHANTMENT)
-                .getOrThrow(Enchantments.SILK_TOUCH);
-        silkPick.enchant(silkTouch, 1);
-        player.setItemSlot(EquipmentSlot.MAINHAND, silkPick);
+                .lookupOrThrow(net.minecraft.core.registries.Registries.ENCHANTMENT);
+        enchantedPick.enchant(enchantments.getOrThrow(Enchantments.SILK_TOUCH), 1);
+        enchantedPick.enchant(enchantments.getOrThrow(Enchantments.FORTUNE), 3);
+        player.setItemSlot(EquipmentSlot.MAINHAND, enchantedPick);
 
         helper.startSequence()
                 .thenExecute(() -> triggerForwardBoost(player))
@@ -129,6 +129,9 @@ public class WallBreakBoostGameTest {
                     int oreBlocks = countGroundItems(helper, Items.IRON_ORE);
                     helper.assertTrue(rawIron > 0, "铁矿应产生无附魔基础掉落（粗铁）");
                     helper.assertTrue(oreBlocks == 0, "不应应用精准采集，不得掉落矿石方块本身");
+                    helper.assertTrue(
+                            rawIron <= 4,
+                            "不应应用时运，粗铁数量应接近无附魔基础掉落, rawIron=" + rawIron);
                 })
                 .thenSucceed();
     }

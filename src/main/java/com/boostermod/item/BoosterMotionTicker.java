@@ -271,7 +271,7 @@ public final class BoosterMotionTicker {
             if (hint.lengthSqr() < 1.0e-6) {
                 hint = fallbackDirection;
             }
-            // 撞墙后速度常被清零：至少沿原推进方向探测一格，避免扫掠退化
+            // 水平碰撞后速度常被清零：至少沿原推进方向探测一格，避免扫掠退化
             if (player.horizontalCollision && hint.lengthSqr() < 1.0) {
                 Vec3 dir = hint.lengthSqr() < 1.0e-6 ? fallbackDirection : hint.normalize();
                 hint = dir.scale(1.0);

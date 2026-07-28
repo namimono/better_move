@@ -21,6 +21,6 @@
 已交付 issue 02：
 
 - `WallBreakSupport`：沿碰撞体扫掠清可破坏阻挡物；无附魔钻石镐上下文生成基础掉落；不可破坏方块终止推进。
-- `BoosterMotionTicker`：破壁资格分支；撞墙清方并恢复前向速度；GameTest FakePlayer 经世界实体回退解析。
+- `BoosterMotionTicker`：破壁资格分支；水平碰撞后清方并恢复前向速度；GameTest FakePlayer 经世界实体回退解析。
 - `WallBreakBoostGameTest` 5 项 + 补注册 `WallBreakUpgradeGameTest`；`PhysicsFakePlayer` 提供位移碰撞。
 - `./gradlew test`、`./gradlew runGameTest`（63）、`./gradlew build` 均通过。
