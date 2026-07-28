@@ -190,6 +190,8 @@ public final class BoosterMotionTicker {
         private boolean insideWallBreak;
         private Vec3 wallEntryVelocity = Vec3.ZERO;
         private boolean hasLeftGround;
+        /** 本段连续墙体内已累计的实际清方 tick（进入时已结算一次代价后从 0 计）。 */
+        private int wallBreakClearTicks;
 
         private ActiveBoost(
                 ServerLevel level,
@@ -215,6 +217,12 @@ public final class BoosterMotionTicker {
         }
 
         private boolean step(ServerPlayer player) {
+            if (!player.isAlive() || player.isDeadOrDying() || player.getHealth() <= 0.0f) {
+                clearWallBreakState();
+                emitEndParticles(player.position());
+                return true;
+            }
+
             if (overloaded && !exploded && OverloadExplosion.isSolidOrEntityImpact(
                     level, player, groundLaunch && tick < 2)) {
                 OverloadExplosion.detonate(level, player);
@@ -224,6 +232,10 @@ public final class BoosterMotionTicker {
             }
 
             boolean wallBreakActive = wallBreakEligible && WallBreakSupport.isInstalled(player);
+            if (!wallBreakActive) {
+                // 卸装 / 移除破壁升级项：立即清除破壁状态，不再保速或计伤害
+                clearWallBreakState();
+            }
             if (wallBreakActive) {
                 if (handleWallBreak(player)) {
                     emitEndParticles(player.position());
@@ -311,20 +323,28 @@ public final class BoosterMotionTicker {
         }
 
         private boolean hitsUnbreakableAhead(ServerPlayer player, Vec3 motion) {
-            WallBreakSupport.Outcome foresight = WallBreakSupport.clearSweptPath(level, player, motion);
-            return foresight == WallBreakSupport.Outcome.HIT_UNBREAKABLE;
+            // 只探测，不在此清方，避免绕过破壁伤害结算
+            return WallBreakSupport.probeSweptPath(level, player, motion)
+                    == WallBreakSupport.Outcome.HIT_UNBREAKABLE;
         }
 
         /**
-         * @return true 若破壁路径撞上不可破坏方块，应结束推进
+         * @return true 若应结束推进（不可破坏方块、破壁致死等）
          */
         private boolean handleWallBreak(ServerPlayer player) {
             Vec3 flight = flightVelocity(player);
+            // 当前位置已不嵌在墙内，且紧邻前方也无阻挡 → 已离开本段墙体（空气间隔），重置代价计时
+            if (insideWallBreak
+                    && !WallBreakSupport.intersectsBreakableCollision(level, player)
+                    && !WallBreakSupport.hasBreakableImmediatelyAhead(level, player, flight, 0.25)) {
+                clearWallBreakState();
+            }
+
             Vec3 sweepHint = sweepHint(flight, player.horizontalCollision);
 
             WallBreakSupport.Outcome outcome = WallBreakSupport.clearSweptPath(level, player, sweepHint);
             if (outcome == WallBreakSupport.Outcome.HIT_UNBREAKABLE) {
-                insideWallBreak = false;
+                clearWallBreakState();
                 return true;
             }
             if (outcome == WallBreakSupport.Outcome.CLEARED) {
@@ -332,6 +352,20 @@ public final class BoosterMotionTicker {
                     // 保速用真实飞行速度，不用扫掠补长后的 hint
                     wallEntryVelocity = captureForwardVelocity(flight);
                     insideWallBreak = true;
+                    wallBreakClearTicks = 0;
+                    if (WallBreakSupport.applyHealthCost(player)) {
+                        clearWallBreakState();
+                        return true;
+                    }
+                } else {
+                    wallBreakClearTicks++;
+                    if (wallBreakClearTicks >= WallBreakSupport.COST_INTERVAL_TICKS) {
+                        wallBreakClearTicks = 0;
+                        if (WallBreakSupport.applyHealthCost(player)) {
+                            clearWallBreakState();
+                            return true;
+                        }
+                    }
                 }
                 applyVelocity(player, wallEntryVelocity);
                 player.horizontalCollision = false;
@@ -339,18 +373,24 @@ public final class BoosterMotionTicker {
             }
 
             if (insideWallBreak) {
-                // 本 tick 未破坏且无水平碰撞：视为已离开连续墙体，停止保速
+                // 本 tick 未破坏且无水平碰撞：视为已离开连续墙体，停止保速并重置伤害计时
                 if (player.horizontalCollision) {
                     applyVelocity(player, wallEntryVelocity);
                     player.horizontalCollision = false;
                 } else {
-                    insideWallBreak = false;
+                    clearWallBreakState();
                 }
             } else if (player.horizontalCollision) {
                 // 仍有水平碰撞但未清到方块：按原规则结束
                 return true;
             }
             return false;
+        }
+
+        private void clearWallBreakState() {
+            insideWallBreak = false;
+            wallEntryVelocity = Vec3.ZERO;
+            wallBreakClearTicks = 0;
         }
 
         private Vec3 flightVelocity(ServerPlayer player) {

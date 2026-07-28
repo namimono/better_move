@@ -145,8 +145,10 @@ public class BoosterMod implements ModInitializer {
                     BoosterMotionTicker.cancel(handler.player);
                     ChargeSessionTracker.clear(handler.player);
                 }));
-        ServerEntityWorldChangeEvents.AFTER_PLAYER_CHANGE_WORLD.register(
-                (player, origin, destination) -> ChargeSessionTracker.cancel(player));
+        ServerEntityWorldChangeEvents.AFTER_PLAYER_CHANGE_WORLD.register((player, origin, destination) -> {
+            ChargeSessionTracker.cancel(player);
+            BoosterMotionTicker.cancel(player);
+        });
         ServerPlayConnectionEvents.JOIN.register((handler, sender, server) -> server.execute(() -> {
             syncHudState(handler.player.server, handler.player);
             syncShakeState(handler.player.server, handler.player);

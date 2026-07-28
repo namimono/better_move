@@ -5,6 +5,8 @@ import com.boostermod.item.BoosterLeggingsItem;
 import com.boostermod.item.BoosterMotionTicker;
 import com.boostermod.upgrade.BoosterUpgradeHelper;
 import com.boostermod.upgrade.BoosterUpgradeType;
+import com.boostermod.villager.VillagerBoostRunner;
+import com.boostermod.wallbreak.WallBreakSupport;
 import com.mojang.authlib.GameProfile;
 import java.util.List;
 import java.util.UUID;
@@ -15,8 +17,13 @@ import net.minecraft.gametest.framework.GameTestHelper;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.SimpleContainer;
+import net.minecraft.world.effect.MobEffectInstance;
+import net.minecraft.world.effect.MobEffects;
+import net.minecraft.world.entity.EntityType;
 import net.minecraft.world.entity.EquipmentSlot;
 import net.minecraft.world.entity.item.ItemEntity;
+import net.minecraft.world.entity.npc.Villager;
+import net.minecraft.world.entity.npc.VillagerProfession;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
@@ -421,6 +428,333 @@ public class WallBreakBoostGameTest {
                             "不可破坏方块不得被穿过");
                 })
                 .thenExecute(() -> cleanupPlayer(player))
+                .thenSucceed();
+    }
+
+    @GameTest(template = FabricGameTest.EMPTY_STRUCTURE, batch = "wallBreak_healthLife", timeoutTicks = TIMEOUT)
+    public void firstWallEntryCostsOneHealthImmediately(GameTestHelper helper) {
+        prepareCorridor(helper, 7);
+        buildStoneWall(helper, 3);
+        ServerPlayer player = spawnBoostingPlayer(helper, new BlockPos(3, 1, 1), "wb-hp-enter", true);
+        player.setHealth(20.0F);
+
+        helper.startSequence()
+                .thenExecute(() -> triggerForwardBoost(
+                        player, new com.boostermod.balance.BoosterBalanceProfile(1.20, 0.060, 6)))
+                .thenWaitUntil(() -> helper.assertTrue(
+                        player.getZ() > helper.absolutePos(new BlockPos(3, 1, 3)).getZ(),
+                        "应进入并突破墙体"))
+                .thenExecute(() -> helper.assertTrue(
+                        player.getHealth() == 19.0F,
+                        "首次进入墙体应立即失去 1 点生命值, health=" + player.getHealth()))
+                .thenExecute(() -> cleanupPlayer(player))
+                .thenSucceed();
+    }
+
+    @GameTest(template = FabricGameTest.EMPTY_STRUCTURE, batch = "wallBreak_healthLife", timeoutTicks = TIMEOUT)
+    public void continuousClearingDamagesEveryTenTicks(GameTestHelper helper) {
+        prepareCorridor(helper, 7);
+        // 厚墙 + 低速：墙内停留足够多清方 tick
+        for (int z = 2; z <= 6; z++) {
+            buildStoneWall(helper, z);
+        }
+        ServerPlayer player = spawnBoostingPlayer(helper, new BlockPos(3, 1, 1), "wb-hp-interval", true);
+        player.setHealth(20.0F);
+        float[] afterFirst = {Float.NaN};
+
+        helper.startSequence()
+                .thenExecute(() -> triggerForwardBoost(
+                        player, new com.boostermod.balance.BoosterBalanceProfile(0.28, 0.0, 1)))
+                .thenWaitUntil(() -> helper.assertTrue(
+                        player.getHealth() < 20.0F && BoosterMotionTicker.isBoosting(player),
+                        "应已首次破壁扣血"))
+                .thenExecute(() -> afterFirst[0] = player.getHealth())
+                .thenWaitUntil(() -> helper.assertTrue(
+                        player.getHealth() <= afterFirst[0] - WallBreakSupport.HEALTH_COST,
+                        "持续破壁累计 " + WallBreakSupport.COST_INTERVAL_TICKS + " 清方 tick 后再扣 1 点, first="
+                                + afterFirst[0]
+                                + " now="
+                                + player.getHealth()))
+                .thenExecute(() -> helper.assertTrue(
+                        player.getHealth() == afterFirst[0] - WallBreakSupport.HEALTH_COST,
+                        "第二次扣血应为固定 1 点, first=" + afterFirst[0] + " now=" + player.getHealth()))
+                .thenExecute(() -> cleanupPlayer(player))
+                .thenSucceed();
+    }
+
+    @GameTest(template = FabricGameTest.EMPTY_STRUCTURE, batch = "wallBreak_healthLife", timeoutTicks = TIMEOUT)
+    public void airGapDoesNotAccumulateDamageAndSecondWallCostsAgain(GameTestHelper helper) {
+        prepareCorridor(helper, 7);
+        // 两堵单层墙 + 空气间隔：每堵墙各扣 1，间隔内不额外累计
+        buildStoneWall(helper, 3);
+        buildStoneWall(helper, 5);
+        ServerPlayer player = spawnBoostingPlayer(helper, new BlockPos(3, 1, 1), "wb-hp-air", true);
+        player.setHealth(20.0F);
+        float[] afterFirstWall = {Float.NaN};
+        float[] midAirHealth = {Float.NaN};
+
+        helper.startSequence()
+                .thenExecute(() -> triggerForwardBoost(
+                        player, new com.boostermod.balance.BoosterBalanceProfile(1.20, 0.060, 4)))
+                .thenWaitUntil(() -> helper.assertTrue(
+                        player.getZ() > helper.absolutePos(new BlockPos(3, 1, 3)).getZ() + 0.5
+                                && player.getHealth() < 20.0F
+                                && player.getZ() < helper.absolutePos(new BlockPos(3, 1, 5)).getZ(),
+                        "应穿出第一堵墙并进入空气间隔"))
+                .thenExecute(() -> {
+                    afterFirstWall[0] = player.getHealth();
+                    midAirHealth[0] = player.getHealth();
+                    helper.assertTrue(
+                            afterFirstWall[0] == 20.0F - WallBreakSupport.HEALTH_COST,
+                            "第一堵墙应只扣 1 点, health=" + afterFirstWall[0]);
+                })
+                .thenIdle(1)
+                .thenExecute(() -> helper.assertTrue(
+                        player.getHealth() == midAirHealth[0]
+                                || player.getZ() >= helper.absolutePos(new BlockPos(3, 1, 5)).getZ(),
+                        "空气间隔不累计破壁伤害, mid="
+                                + midAirHealth[0]
+                                + " now="
+                                + player.getHealth()))
+                .thenWaitUntil(() -> helper.assertTrue(
+                        player.getZ() > helper.absolutePos(new BlockPos(3, 1, 5)).getZ() + 0.4,
+                        "同一次推进应突破第二堵墙"))
+                .thenExecute(() -> helper.assertTrue(
+                        player.getHealth() == 20.0F - 2.0F * WallBreakSupport.HEALTH_COST,
+                        "两堵墙应各立即结算 1 点（空气不额外累计）, health=" + player.getHealth()))
+                .thenExecute(() -> cleanupPlayer(player))
+                .thenSucceed();
+    }
+
+    @GameTest(template = FabricGameTest.EMPTY_STRUCTURE, batch = "wallBreak_healthLife", timeoutTicks = TIMEOUT)
+    public void wallBreakDamageIgnoresArmorResistanceAndIFrames(GameTestHelper helper) {
+        prepareCorridor(helper, 7);
+        buildStoneWall(helper, 3);
+        ServerPlayer player = spawnBoostingPlayer(helper, new BlockPos(3, 1, 1), "wb-hp-armor", true);
+        player.setHealth(20.0F);
+        player.setItemSlot(EquipmentSlot.HEAD, new ItemStack(Items.NETHERITE_HELMET));
+        player.setItemSlot(EquipmentSlot.CHEST, new ItemStack(Items.NETHERITE_CHESTPLATE));
+        player.setItemSlot(EquipmentSlot.FEET, new ItemStack(Items.NETHERITE_BOOTS));
+        player.addEffect(new MobEffectInstance(MobEffects.DAMAGE_RESISTANCE, 200, 4, false, false));
+        player.invulnerableTime = 100;
+
+        helper.startSequence()
+                .thenExecute(() -> triggerForwardBoost(
+                        player, new com.boostermod.balance.BoosterBalanceProfile(1.20, 0.060, 6)))
+                .thenWaitUntil(() -> helper.assertTrue(
+                        player.getZ() > helper.absolutePos(new BlockPos(3, 1, 3)).getZ(),
+                        "应穿过墙体"))
+                .thenExecute(() -> helper.assertTrue(
+                        player.getHealth() == 19.0F,
+                        "护甲、抗性与无敌帧不得减免破壁固定伤害, health=" + player.getHealth()))
+                .thenExecute(() -> cleanupPlayer(player))
+                .thenSucceed();
+    }
+
+    @GameTest(template = FabricGameTest.EMPTY_STRUCTURE, batch = "wallBreak_healthLife", timeoutTicks = TIMEOUT)
+    public void wallBreakDamageCanKillAndClearsBoostState(GameTestHelper helper) {
+        prepareCorridor(helper, 7);
+        for (int z = 3; z <= 5; z++) {
+            buildStoneWall(helper, z);
+        }
+        ServerPlayer player = spawnBoostingPlayer(helper, new BlockPos(3, 1, 1), "wb-hp-kill", true);
+        player.setHealth(1.0F);
+
+        helper.startSequence()
+                .thenExecute(() -> triggerForwardBoost(
+                        player, new com.boostermod.balance.BoosterBalanceProfile(1.20, 0.060, 8)))
+                .thenWaitUntil(() -> helper.assertTrue(
+                        !player.isAlive() || player.isDeadOrDying() || player.getHealth() <= 0.0F,
+                        "破壁伤害应可致死"))
+                .thenExecute(() -> helper.assertTrue(
+                        !BoosterMotionTicker.isBoosting(player),
+                        "死亡后不得残留推进/破壁状态"))
+                .thenIdle(6)
+                .thenExecute(() -> {
+                    helper.assertTrue(
+                            !BoosterMotionTicker.isBoosting(player),
+                            "死亡后推进状态仍应保持清理");
+                    // 1 点血进入首堵墙即死，更远墙体不得继续被清
+                    helper.assertBlockPresent(Blocks.STONE, new BlockPos(3, 1, 5));
+                    helper.assertBlockPresent(Blocks.STONE, new BlockPos(3, 2, 5));
+                })
+                .thenExecute(() -> cleanupPlayer(player))
+                .thenSucceed();
+    }
+
+    @GameTest(template = FabricGameTest.EMPTY_STRUCTURE, batch = "wallBreak_healthLife", timeoutTicks = TIMEOUT)
+    public void removingBoosterMidBoostClearsWallBreak(GameTestHelper helper) {
+        prepareCorridor(helper, 7);
+        for (int z = 3; z <= 5; z++) {
+            buildStoneWall(helper, z);
+        }
+        ServerPlayer player = spawnBoostingPlayer(helper, new BlockPos(3, 1, 1), "wb-unequip", true);
+
+        helper.startSequence()
+                .thenExecute(() -> triggerForwardBoost(
+                        player, new com.boostermod.balance.BoosterBalanceProfile(1.20, 0.060, 10)))
+                .thenWaitUntil(() -> helper.assertTrue(
+                        player.getZ() > helper.absolutePos(new BlockPos(3, 1, 3)).getZ()
+                                && helper.getBlockState(new BlockPos(3, 1, 3)).is(Blocks.AIR),
+                        "应先开始破壁"))
+                .thenExecute(() -> player.setItemSlot(EquipmentSlot.LEGS, ItemStack.EMPTY))
+                .thenIdle(8)
+                .thenExecute(() -> {
+                    helper.assertTrue(
+                            !WallBreakSupport.isInstalled(player),
+                            "卸下推进器后统一查询应不再识别破壁升级项");
+                    // 卸装后失去破壁资格：更远墙体应保留
+                    helper.assertBlockPresent(Blocks.STONE, new BlockPos(3, 1, 5));
+                })
+                .thenExecute(() -> cleanupPlayer(player))
+                .thenSucceed();
+    }
+
+    @GameTest(template = FabricGameTest.EMPTY_STRUCTURE, batch = "wallBreak_healthLife", timeoutTicks = TIMEOUT)
+    public void removingWallBreakUpgradeMidBoostStopsClearing(GameTestHelper helper) {
+        prepareCorridor(helper, 7);
+        for (int z = 3; z <= 5; z++) {
+            buildStoneWall(helper, z);
+        }
+        ServerPlayer player = spawnBoostingPlayer(helper, new BlockPos(3, 1, 1), "wb-rm-upg", true);
+
+        helper.startSequence()
+                .thenExecute(() -> triggerForwardBoost(
+                        player, new com.boostermod.balance.BoosterBalanceProfile(1.20, 0.060, 10)))
+                .thenWaitUntil(() -> helper.assertTrue(
+                        helper.getBlockState(new BlockPos(3, 1, 3)).is(Blocks.AIR),
+                        "应先破开近处墙体"))
+                .thenExecute(() -> {
+                    ItemStack legs = player.getItemBySlot(EquipmentSlot.LEGS);
+                    SimpleContainer empty = new SimpleContainer(BoosterUpgradeHelper.MAX_SLOTS);
+                    BoosterUpgradeHelper.saveContainer(legs, empty, 5, helper.getLevel().registryAccess());
+                    player.setItemSlot(EquipmentSlot.LEGS, legs);
+                    helper.assertTrue(
+                            !BoosterUpgradeHelper.hasUpgrade(
+                                    legs, BoosterUpgradeType.WALL_BREAK, helper.getLevel().registryAccess()),
+                            "升级项应已从推进器移除");
+                })
+                .thenIdle(8)
+                .thenExecute(() -> helper.assertBlockPresent(Blocks.STONE, new BlockPos(3, 1, 5)))
+                .thenExecute(() -> cleanupPlayer(player))
+                .thenSucceed();
+    }
+
+    @GameTest(template = FabricGameTest.EMPTY_STRUCTURE, batch = "wallBreak_healthLife", timeoutTicks = TIMEOUT)
+    public void cancelBoostClearsWallBreakState(GameTestHelper helper) {
+        prepareCorridor(helper, 7);
+        buildStoneWall(helper, 3);
+        buildStoneWall(helper, 5);
+        ServerPlayer player = spawnBoostingPlayer(helper, new BlockPos(3, 1, 1), "wb-cancel", true);
+
+        helper.startSequence()
+                .thenExecute(() -> triggerForwardBoost(
+                        player, new com.boostermod.balance.BoosterBalanceProfile(1.20, 0.060, 10)))
+                .thenWaitUntil(() -> helper.assertTrue(
+                        BoosterMotionTicker.isBoosting(player),
+                        "应处于推进中"))
+                .thenExecute(() -> BoosterMotionTicker.cancel(player))
+                .thenExecute(() -> helper.assertTrue(
+                        !BoosterMotionTicker.isBoosting(player),
+                        "取消推进应清除运动与破壁状态"))
+                .thenIdle(6)
+                .thenExecute(() -> {
+                    helper.assertBlockPresent(Blocks.STONE, new BlockPos(3, 1, 5));
+                    helper.assertTrue(
+                            !BoosterMotionTicker.isBoosting(player),
+                            "取消后不得残留破壁推进");
+                })
+                .thenExecute(() -> cleanupPlayer(player))
+                .thenSucceed();
+    }
+
+    @GameTest(template = FabricGameTest.EMPTY_STRUCTURE, batch = "wallBreak_healthLife", timeoutTicks = TIMEOUT)
+    public void legsSlotEnablesWallBreakViaUnifiedEquipmentQuery(GameTestHelper helper) {
+        prepareCorridor(helper, 7);
+        buildStoneWall(helper, 3);
+        ServerPlayer player = spawnBoostingPlayer(helper, new BlockPos(3, 1, 1), "wb-legs-eq", true);
+
+        helper.startSequence()
+                .thenExecute(() -> helper.assertTrue(
+                        WallBreakSupport.isInstalled(player),
+                        "护腿槽推进器应被统一装备查询识别为已装破壁升级项"))
+                .thenExecute(() -> triggerForwardBoost(
+                        player, new com.boostermod.balance.BoosterBalanceProfile(1.20, 0.060, 6)))
+                .thenWaitUntil(() -> helper.assertTrue(
+                        player.getZ() > helper.absolutePos(new BlockPos(3, 1, 3)).getZ() + 0.4,
+                        "护腿槽路径应能启用破壁推进"))
+                .thenExecute(() -> helper.assertBlockPresent(Blocks.AIR, new BlockPos(3, 1, 3)))
+                .thenExecute(() -> cleanupPlayer(player))
+                .thenSucceed();
+    }
+
+    @GameTest(template = FabricGameTest.EMPTY_STRUCTURE, batch = "wallBreak_healthLife", timeoutTicks = TIMEOUT)
+    public void adventureModeAlsoPaysWallBreakHealthCost(GameTestHelper helper) {
+        prepareCorridor(helper, 7);
+        buildStoneWall(helper, 3);
+        ServerPlayer player = spawnBoostingPlayer(helper, new BlockPos(3, 1, 1), "wb-adv", true);
+        player.setGameMode(GameType.ADVENTURE);
+        player.setHealth(20.0F);
+
+        helper.startSequence()
+                .thenExecute(() -> triggerForwardBoost(
+                        player, new com.boostermod.balance.BoosterBalanceProfile(1.20, 0.060, 6)))
+                .thenWaitUntil(() -> helper.assertTrue(
+                        player.getZ() > helper.absolutePos(new BlockPos(3, 1, 3)).getZ(),
+                        "冒险模式也应能破壁"))
+                .thenExecute(() -> helper.assertTrue(
+                        player.getHealth() == 19.0F,
+                        "冒险模式应真实扣血, health=" + player.getHealth()))
+                .thenExecute(() -> cleanupPlayer(player))
+                .thenSucceed();
+    }
+
+    @GameTest(template = FabricGameTest.EMPTY_STRUCTURE, batch = "wallBreak_healthLife", timeoutTicks = TIMEOUT)
+    public void armedVillagerIgnoresWallBreakUpgrade(GameTestHelper helper) {
+        prepareCorridor(helper, 7);
+        Villager villager = helper.spawn(EntityType.VILLAGER, new BlockPos(3, 1, 1));
+        villager.setVillagerData(villager.getVillagerData().setProfession(VillagerProfession.NONE));
+        villager.setBaby(false);
+
+        ItemStack booster = new ItemStack(BoosterMod.BOOSTER_LEGGINGS_IRON);
+        SimpleContainer upgrades = new SimpleContainer(BoosterUpgradeHelper.MAX_SLOTS);
+        upgrades.setItem(0, new ItemStack(BoosterMod.WALL_BREAK_UPGRADE));
+        BoosterUpgradeHelper.saveContainer(
+                booster, upgrades, 3, helper.getLevel().registryAccess());
+        villager.setItemSlot(EquipmentSlot.LEGS, booster);
+        villager.setItemSlot(EquipmentSlot.MAINHAND, new ItemStack(Items.IRON_SWORD));
+        villager.setGuaranteedDrop(EquipmentSlot.LEGS);
+        villager.setGuaranteedDrop(EquipmentSlot.MAINHAND);
+
+        // 距离需 >= VillagerBoostRunner.MIN_BOOST_DISTANCE（6）
+        ServerPlayer target = spawnBoostingPlayer(helper, new BlockPos(3, 1, 7), "wb-vill-tgt", false);
+        helper.startSequence()
+                .thenExecute(() -> {
+                    Vec3 vPos = helper.absoluteVec(new Vec3(3.5, 1.0, 0.5));
+                    Vec3 tPos = helper.absoluteVec(new Vec3(3.5, 1.0, 7.5));
+                    villager.teleportTo(vPos.x, vPos.y, vPos.z);
+                    villager.setOnGround(true);
+                    target.teleportTo(tPos.x, tPos.y, tPos.z);
+                    helper.assertTrue(
+                            villager.distanceTo(target) >= VillagerBoostRunner.MIN_BOOST_DISTANCE,
+                            "测试距离应满足村民推进最小距离, d=" + villager.distanceTo(target));
+                    helper.assertTrue(
+                            VillagerBoostRunner.tryStartBoost(villager, target),
+                            "武装村民应能按原规则发起村民推进（忽略破壁升级项）");
+                })
+                .thenExecute(() -> buildStoneWall(helper, 3))
+                .thenWaitUntil(() -> helper.assertTrue(
+                        !VillagerBoostRunner.isBoosting(villager),
+                        "撞墙后村民推进应按原边界结束"))
+                .thenExecute(() -> {
+                    helper.assertBlockPresent(Blocks.STONE, new BlockPos(3, 1, 3));
+                    helper.assertBlockPresent(Blocks.STONE, new BlockPos(3, 2, 3));
+                })
+                .thenExecute(() -> {
+                    VillagerBoostRunner.clear(villager);
+                    cleanupPlayer(target);
+                    villager.discard();
+                })
                 .thenSucceed();
     }
 
