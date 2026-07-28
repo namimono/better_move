@@ -4,6 +4,7 @@ import com.boostermod.BoosterMod;
 import com.boostermod.balance.BoosterBalanceProfile;
 import com.boostermod.charge.OverloadExplosion;
 import com.boostermod.combat.BoostStrikeSupport;
+import com.boostermod.wallbreak.WallBreakSupport;
 import java.util.Iterator;
 import java.util.Map;
 import java.util.UUID;
@@ -86,14 +87,25 @@ public final class BoosterMotionTicker {
             startY = Math.max(GROUND_JUMP_KICK, startY);
         }
 
-        player.setDeltaMovement(startX, startY, startZ);
+        Vec3 startVelocity = new Vec3(startX, startY, startZ);
+        player.setDeltaMovement(startVelocity);
         player.resetFallDistance();
         player.hurtMarked = true;
 
+        boolean wallBreak = !overloaded && WallBreakSupport.isInstalled(player);
         ACTIVE.put(
                 player.getUUID(),
                 new ActiveBoost(
-                        level, direction, profile, originEye, eyeOffsetY, groundLaunch, grantedNoGravity, overloaded));
+                        level,
+                        direction,
+                        profile,
+                        originEye,
+                        eyeOffsetY,
+                        groundLaunch,
+                        grantedNoGravity,
+                        overloaded,
+                        wallBreak,
+                        startVelocity));
     }
 
     public static void tickServer(MinecraftServer server) {
@@ -101,18 +113,30 @@ public final class BoosterMotionTicker {
         while (it.hasNext()) {
             Map.Entry<UUID, ActiveBoost> entry = it.next();
             UUID id = entry.getKey();
-            ServerPlayer player = server.getPlayerList().getPlayer(id);
+            ActiveBoost boost = entry.getValue();
+            ServerPlayer player = resolvePlayer(server, boost, id);
             if (player == null) {
                 it.remove();
                 continue;
             }
 
-            ActiveBoost boost = entry.getValue();
             if (boost.step(player)) {
                 stopBoost(player, boost);
                 it.remove();
             }
         }
+    }
+
+    /**
+     * 优先走 PlayerList；GameTest FakePlayer 只挂在世界实体里，需回退到 {@code level.getEntity}。
+     */
+    private static ServerPlayer resolvePlayer(MinecraftServer server, ActiveBoost boost, UUID id) {
+        ServerPlayer player = server.getPlayerList().getPlayer(id);
+        if (player != null) {
+            return player;
+        }
+        var entity = boost.level.getEntity(id);
+        return entity instanceof ServerPlayer serverPlayer ? serverPlayer : null;
     }
 
     public static void cancel(ServerPlayer player) {
@@ -156,9 +180,11 @@ public final class BoosterMotionTicker {
         private final boolean groundLaunch;
         private final boolean grantedNoGravity;
         private final boolean overloaded;
+        private final boolean wallBreakEligible;
         private boolean grantedApexNoGravity;
         private boolean exploded;
         private int tick;
+        private Vec3 lastAppliedVelocity;
 
         private ActiveBoost(
                 ServerLevel level,
@@ -168,7 +194,9 @@ public final class BoosterMotionTicker {
                 double eyeOffsetY,
                 boolean groundLaunch,
                 boolean grantedNoGravity,
-                boolean overloaded) {
+                boolean overloaded,
+                boolean wallBreakEligible,
+                Vec3 startVelocity) {
             this.level = level;
             this.fallbackDirection = fallbackDirection;
             this.profile = profile;
@@ -177,6 +205,8 @@ public final class BoosterMotionTicker {
             this.groundLaunch = groundLaunch;
             this.grantedNoGravity = grantedNoGravity;
             this.overloaded = overloaded;
+            this.wallBreakEligible = wallBreakEligible;
+            this.lastAppliedVelocity = startVelocity;
         }
 
         private boolean step(ServerPlayer player) {
@@ -188,7 +218,12 @@ public final class BoosterMotionTicker {
                 return true;
             }
 
-            if (!overloaded && player.horizontalCollision) {
+            if (wallBreakEligible && WallBreakSupport.isInstalled(player)) {
+                if (handleWallBreak(player)) {
+                    emitEndParticles(player.position());
+                    return true;
+                }
+            } else if (!overloaded && player.horizontalCollision) {
                 emitEndParticles(player.position());
                 return true;
             }
@@ -204,10 +239,19 @@ public final class BoosterMotionTicker {
             Vec3 look = player.getViewVector(1.0f);
             Vec3 thrustDirection = look.lengthSqr() < 1.0e-6 ? fallbackDirection : look.normalize();
             Vec3 velocity = maybeSuppressGravityAtApex(player, player.getDeltaMovement());
-            player.setDeltaMovement(
+            Vec3 next = new Vec3(
                     velocity.x + thrustDirection.x * thrust,
                     velocity.y + thrustDirection.y * thrust,
                     velocity.z + thrustDirection.z * thrust);
+            applyVelocity(player, next);
+
+            if (wallBreakEligible && WallBreakSupport.isInstalled(player)) {
+                WallBreakSupport.Outcome foresight = WallBreakSupport.clearSweptPath(level, player, next);
+                if (foresight == WallBreakSupport.Outcome.HIT_UNBREAKABLE) {
+                    emitEndParticles(player.position());
+                    return true;
+                }
+            }
 
             if (player.onGround()) {
                 player.setOnGround(false);
@@ -217,6 +261,43 @@ public final class BoosterMotionTicker {
 
             tick++;
             return false;
+        }
+
+        /**
+         * @return true 若破壁路径撞上不可破坏方块，应结束推进
+         */
+        private boolean handleWallBreak(ServerPlayer player) {
+            Vec3 hint = lastAppliedVelocity;
+            if (hint.lengthSqr() < 1.0e-6) {
+                hint = fallbackDirection;
+            }
+            // 撞墙后速度常被清零：至少沿原推进方向探测一格，避免扫掠退化
+            if (player.horizontalCollision && hint.lengthSqr() < 1.0) {
+                Vec3 dir = hint.lengthSqr() < 1.0e-6 ? fallbackDirection : hint.normalize();
+                hint = dir.scale(1.0);
+            }
+
+            WallBreakSupport.Outcome outcome = WallBreakSupport.clearSweptPath(level, player, hint);
+            if (outcome == WallBreakSupport.Outcome.HIT_UNBREAKABLE) {
+                return true;
+            }
+            if (outcome == WallBreakSupport.Outcome.CLEARED || player.horizontalCollision) {
+                if (outcome == WallBreakSupport.Outcome.CLEARED) {
+                    applyVelocity(player, lastAppliedVelocity.lengthSqr() > 1.0e-6
+                            ? lastAppliedVelocity
+                            : hint);
+                    player.horizontalCollision = false;
+                } else if (player.horizontalCollision) {
+                    // 仍有水平碰撞但未清到方块：按原规则结束
+                    return true;
+                }
+            }
+            return false;
+        }
+
+        private void applyVelocity(ServerPlayer player, Vec3 velocity) {
+            lastAppliedVelocity = velocity;
+            player.setDeltaMovement(velocity);
         }
 
         private Vec3 maybeSuppressGravityAtApex(ServerPlayer player, Vec3 velocity) {
