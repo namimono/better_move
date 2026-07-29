@@ -94,7 +94,8 @@ public final class BoosterMotionTicker {
         player.resetFallDistance();
         player.hurtMarked = true;
 
-        boolean wallBreak = !overloaded && WallBreakSupport.isInstalled(player);
+        // 过载与破壁可并存：破壁期间持续真实过载爆炸，不再因过载关闭破壁资格。
+        boolean wallBreak = WallBreakSupport.isInstalled(player);
         ACTIVE.put(
                 player.getUUID(),
                 new ActiveBoost(
@@ -223,19 +224,25 @@ public final class BoosterMotionTicker {
                 return true;
             }
 
-            if (overloaded && !exploded && OverloadExplosion.isSolidOrEntityImpact(
-                    level, player, groundLaunch && tick < 2)) {
+            boolean wallBreakActive = wallBreakEligible && WallBreakSupport.isInstalled(player);
+            if (!wallBreakActive) {
+                // 卸装 / 移除破壁升级项：立即清除破壁状态，不再保速或计伤害
+                clearWallBreakState();
+            }
+
+            // 无破壁资格的过载：首次固体/实体撞击爆炸并结束。
+            // 有破壁时爆炸由破壁清方路径持续触发，不在此截停推进。
+            if (overloaded
+                    && !wallBreakActive
+                    && !exploded
+                    && OverloadExplosion.isSolidOrEntityImpact(
+                            level, player, groundLaunch && tick < 2)) {
                 OverloadExplosion.detonate(level, player);
                 exploded = true;
                 emitEndParticles(player.position());
                 return true;
             }
 
-            boolean wallBreakActive = wallBreakEligible && WallBreakSupport.isInstalled(player);
-            if (!wallBreakActive) {
-                // 卸装 / 移除破壁升级项：立即清除破壁状态，不再保速或计伤害
-                clearWallBreakState();
-            }
             if (wallBreakActive) {
                 if (handleWallBreak(player)) {
                     emitEndParticles(player.position());
@@ -344,6 +351,10 @@ public final class BoosterMotionTicker {
 
             WallBreakSupport.Outcome outcome = WallBreakSupport.clearSweptPath(level, player, sweepHint);
             if (outcome == WallBreakSupport.Outcome.HIT_UNBREAKABLE) {
+                // 过载+破壁：不可破坏边界上再炸一次后结束
+                if (overloaded) {
+                    detonateOverload(player);
+                }
                 clearWallBreakState();
                 return true;
             }
@@ -353,6 +364,10 @@ public final class BoosterMotionTicker {
                     wallEntryVelocity = captureForwardVelocity(flight);
                     insideWallBreak = true;
                     wallBreakClearTicks = 0;
+                    // 进入墙体：过载时立即真实爆炸一次
+                    if (overloaded) {
+                        detonateOverload(player);
+                    }
                     if (WallBreakSupport.applyHealthCost(player)) {
                         clearWallBreakState();
                         return true;
@@ -361,6 +376,10 @@ public final class BoosterMotionTicker {
                     wallBreakClearTicks++;
                     if (wallBreakClearTicks >= WallBreakSupport.COST_INTERVAL_TICKS) {
                         wallBreakClearTicks = 0;
+                        // 持续破壁：与生命代价同节奏再次过载爆炸
+                        if (overloaded) {
+                            detonateOverload(player);
+                        }
                         if (WallBreakSupport.applyHealthCost(player)) {
                             clearWallBreakState();
                             return true;
@@ -381,16 +400,31 @@ public final class BoosterMotionTicker {
                     clearWallBreakState();
                 }
             } else if (player.horizontalCollision) {
-                // 仍有水平碰撞但未清到方块：按原规则结束
+                // 仍有水平碰撞但未清到方块：过载时炸一次后结束
+                if (overloaded) {
+                    detonateOverload(player);
+                }
                 return true;
+            } else if (overloaded && !exploded && OverloadExplosion.hitsEntity(level, player)) {
+                // 破壁路径上空中撞实体：炸一次，不结束推进（墙段离开后可再炸）
+                detonateOverload(player);
             }
             return false;
+        }
+
+        private void detonateOverload(ServerPlayer player) {
+            OverloadExplosion.detonate(level, player);
+            exploded = true;
         }
 
         private void clearWallBreakState() {
             insideWallBreak = false;
             wallEntryVelocity = Vec3.ZERO;
             wallBreakClearTicks = 0;
+            // 离开墙体后允许下一段破壁再次过载爆炸
+            if (overloaded) {
+                exploded = false;
+            }
         }
 
         private Vec3 flightVelocity(ServerPlayer player) {

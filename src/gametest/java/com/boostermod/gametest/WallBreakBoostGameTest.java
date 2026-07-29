@@ -1004,40 +1004,199 @@ public class WallBreakBoostGameTest {
                 .thenSucceed();
     }
 
-    @GameTest(template = FabricGameTest.EMPTY_STRUCTURE, batch = "wallBreak_creativeBoundary", timeoutTicks = TIMEOUT)
-    public void overloadedBoostDoesNotEnableWallBreakHealthCost(GameTestHelper helper) {
+    /**
+     * 回归：破壁 + 过载同时启用时，蓄力达过载应能持续破壁推进（不应在首撞后立刻结束）。
+     * 对应玩家症状：未过载可一直破壁；过载后反而不能一直推进。
+     */
+    @GameTest(template = FabricGameTest.EMPTY_STRUCTURE, batch = "wallBreak_overloadCombo", timeoutTicks = TIMEOUT)
+    public void overloadedWithWallBreakContinuesThroughThickWall(GameTestHelper helper) {
         prepareCorridor(helper, 7);
-        buildStoneWall(helper, 3);
-        ServerPlayer player = spawnBoostingPlayer(helper, new BlockPos(3, 1, 1), "wb-ovl", true);
+        for (int z = 3; z <= 5; z++) {
+            buildStoneWall(helper, z);
+        }
+        ServerPlayer player = spawnBoostingPlayer(helper, new BlockPos(3, 1, 1), "wb-ovl-combo", true);
         player.setHealth(20.0F);
 
         helper.startSequence()
-                .thenExecute(() -> {
-                    // 过载推进：规格未声明与破壁组合，不得走破壁清方/扣血分支
-                    Vec3 direction = new Vec3(0.0, 0.0, 1.0);
-                    BoosterMotionTicker.start(
-                            player.serverLevel(),
-                            player,
-                            direction,
-                            new com.boostermod.balance.BoosterBalanceProfile(1.20, 0.060, 6),
-                            player.getEyePosition(),
-                            player.getEyeY() - player.getY(),
-                            false,
-                            true,
-                            true);
-                })
+                .thenExecute(() -> startOverloadedBoost(player, 2))
                 .thenWaitUntil(() -> helper.assertTrue(
-                        !BoosterMotionTicker.isBoosting(player) || player.getHealth() < 20.0F,
-                        "过载推进应撞击结束或爆炸自伤"))
+                        BoosterMotionTicker.isBoosting(player),
+                        "应成功发起过载+破壁推进"))
+                .thenWaitUntil(() -> helper.assertTrue(
+                        player.getZ() > helper.absolutePos(new BlockPos(3, 1, 3)).getZ(),
+                        "应已进入连续墙体（过载不得在首撞立刻结束推进）"))
+                .thenIdle(3)
                 .thenExecute(() -> {
-                    float health = player.getHealth();
-                    // 破壁首次固定扣 1 → 19；过载自伤 4 → 16（或未结算前仍 20）。不得出现破壁代价。
                     helper.assertTrue(
-                            Math.abs(health - 19.0F) > 0.01F,
-                            "过载路径不得启用破壁生命代价, health=" + health);
+                            BoosterMotionTicker.isBoosting(player),
+                            "过载+破壁应在 thrustTicks 结束后仍保持破壁推进, boosting="
+                                    + BoosterMotionTicker.isBoosting(player)
+                                    + " z=" + player.getZ());
+                    helper.assertTrue(
+                            player.getZ() > helper.absolutePos(new BlockPos(3, 1, 4)).getZ(),
+                            "过载+破壁应持续深入厚墙, z=" + player.getZ());
+                    helper.assertBlockPresent(Blocks.AIR, new BlockPos(3, 1, 3));
+                    helper.assertBlockPresent(Blocks.AIR, new BlockPos(3, 1, 4));
                 })
                 .thenExecute(() -> cleanupPlayer(player))
                 .thenSucceed();
+    }
+
+    /**
+     * 对照：未过载 + 破壁在同样厚墙下可持续破壁（证明问题专属于过载组合）。
+     */
+    @GameTest(template = FabricGameTest.EMPTY_STRUCTURE, batch = "wallBreak_overloadCombo", timeoutTicks = TIMEOUT)
+    public void nonOverloadedWithWallBreakContinuesThroughThickWall(GameTestHelper helper) {
+        prepareCorridor(helper, 7);
+        for (int z = 3; z <= 5; z++) {
+            buildStoneWall(helper, z);
+        }
+        ServerPlayer player = spawnBoostingPlayer(helper, new BlockPos(3, 1, 1), "wb-no-ovl", true);
+
+        helper.startSequence()
+                .thenExecute(() -> triggerForwardBoost(
+                        player, new com.boostermod.balance.BoosterBalanceProfile(1.20, 0.060, 2)))
+                .thenWaitUntil(() -> helper.assertTrue(
+                        BoosterMotionTicker.isBoosting(player),
+                        "应成功发起非过载破壁推进"))
+                .thenWaitUntil(() -> helper.assertTrue(
+                        player.getZ() > helper.absolutePos(new BlockPos(3, 1, 3)).getZ(),
+                        "应已进入连续墙体"))
+                .thenIdle(3)
+                .thenExecute(() -> {
+                    helper.assertTrue(
+                            BoosterMotionTicker.isBoosting(player),
+                            "非过载破壁应保持推进");
+                    helper.assertTrue(
+                            player.getZ() > helper.absolutePos(new BlockPos(3, 1, 4)).getZ(),
+                            "非过载破壁应持续深入厚墙, z=" + player.getZ());
+                })
+                .thenExecute(() -> cleanupPlayer(player))
+                .thenSucceed();
+    }
+
+    /**
+     * 过载+破壁：进入墙体应触发真实过载爆炸自伤，并仍能继续破壁。
+     */
+    @GameTest(template = FabricGameTest.EMPTY_STRUCTURE, batch = "wallBreak_overloadCombo", timeoutTicks = TIMEOUT)
+    public void overloadedWithWallBreakDetonatesAndKeepsGoing(GameTestHelper helper) {
+        prepareCorridor(helper, 7);
+        for (int z = 3; z <= 5; z++) {
+            buildStoneWall(helper, z);
+        }
+        ServerPlayer player = spawnBoostingPlayer(helper, new BlockPos(3, 1, 1), "wb-ovl-boom", true);
+        player.setHealth(20.0F);
+
+        helper.startSequence()
+                .thenExecute(() -> startOverloadedBoost(player, 2))
+                .thenWaitUntil(() -> helper.assertTrue(
+                        player.getZ() > helper.absolutePos(new BlockPos(3, 1, 3)).getZ(),
+                        "应进入墙体"))
+                .thenExecute(() -> {
+                    float health = player.getHealth();
+                    // 过载自伤 4 + 破壁首次代价 1 → ≤15；不得满血（说明未炸）
+                    helper.assertTrue(
+                            health <= 20.0F - com.boostermod.charge.OverloadExplosion.SELF_DAMAGE,
+                            "进入墙体应触发过载爆炸自伤, health=" + health);
+                    helper.assertTrue(
+                            BoosterMotionTicker.isBoosting(player)
+                                    || player.getZ()
+                                            > helper.absolutePos(new BlockPos(3, 1, 4)).getZ(),
+                            "爆炸后仍应保持破壁推进或已深入墙体");
+                })
+                .thenExecute(() -> cleanupPlayer(player))
+                .thenSucceed();
+    }
+
+    /**
+     * 过载+破壁：空气间隔隔开的两段墙体，离开后应 re-arm，第二段再炸一次。
+     */
+    @GameTest(template = FabricGameTest.EMPTY_STRUCTURE, batch = "wallBreak_overloadCombo", timeoutTicks = TIMEOUT)
+    public void overloadedWithWallBreakRearmsExplosionAcrossAirGap(GameTestHelper helper) {
+        prepareCorridor(helper, 7);
+        buildStoneWall(helper, 3);
+        // z=4 空气间隔
+        buildStoneWall(helper, 5);
+        ServerPlayer player = spawnBoostingPlayer(helper, new BlockPos(3, 1, 1), "wb-ovl-rearm", true);
+        player.setHealth(20.0F);
+        float[] afterFirst = {20.0F};
+
+        helper.startSequence()
+                .thenExecute(() -> startOverloadedBoost(player, 6))
+                .thenWaitUntil(() -> helper.assertTrue(
+                        player.getZ() > helper.absolutePos(new BlockPos(3, 1, 3)).getZ() + 0.4,
+                        "应穿过第一堵墙"))
+                .thenExecute(() -> {
+                    afterFirst[0] = player.getHealth();
+                    helper.assertTrue(
+                            afterFirst[0]
+                                    <= 20.0F - com.boostermod.charge.OverloadExplosion.SELF_DAMAGE,
+                            "第一堵墙应已过载爆炸, health=" + afterFirst[0]);
+                })
+                .thenWaitUntil(() -> helper.assertTrue(
+                        player.getZ() > helper.absolutePos(new BlockPos(3, 1, 5)).getZ(),
+                        "应进入第二堵墙"))
+                .thenExecute(() -> {
+                    float health = player.getHealth();
+                    helper.assertTrue(
+                            health
+                                    <= afterFirst[0]
+                                            - com.boostermod.charge.OverloadExplosion.SELF_DAMAGE
+                                            + 0.01F,
+                            "空气间隔后第二段墙应再次过载爆炸, afterFirst="
+                                    + afterFirst[0]
+                                    + " health="
+                                    + health);
+                    helper.assertBlockPresent(Blocks.AIR, new BlockPos(3, 1, 3));
+                    helper.assertBlockPresent(Blocks.AIR, new BlockPos(3, 1, 5));
+                })
+                .thenExecute(() -> cleanupPlayer(player))
+                .thenSucceed();
+    }
+
+    /**
+     * 无破壁时过载仍保持「首次撞击爆炸并结束」，不得误开持续破壁。
+     */
+    @GameTest(template = FabricGameTest.EMPTY_STRUCTURE, batch = "wallBreak_overloadCombo", timeoutTicks = TIMEOUT)
+    public void overloadedWithoutWallBreakStillEndsOnFirstImpact(GameTestHelper helper) {
+        prepareCorridor(helper, 7);
+        buildStoneWall(helper, 3);
+        ServerPlayer player = spawnBoostingPlayer(helper, new BlockPos(3, 1, 1), "ovl-no-wb", false);
+        player.setHealth(20.0F);
+
+        helper.startSequence()
+                .thenExecute(() -> startOverloadedBoost(player, 6))
+                .thenWaitUntil(() -> helper.assertTrue(
+                        !BoosterMotionTicker.isBoosting(player),
+                        "无破壁的过载应在首次撞击后结束推进"))
+                .thenExecute(() -> {
+                    helper.assertTrue(
+                            player.getZ()
+                                    < helper.absolutePos(new BlockPos(3, 1, 4)).getZ(),
+                            "无破壁过载不得穿过厚墙后半段, z=" + player.getZ());
+                    // 墙体可能被爆炸轰开一部分，但推进本身应已结束
+                    helper.assertTrue(
+                            player.getHealth()
+                                    <= 20.0F - com.boostermod.charge.OverloadExplosion.SELF_DAMAGE
+                                            + 0.01F,
+                            "应发生过载自伤, health=" + player.getHealth());
+                })
+                .thenExecute(() -> cleanupPlayer(player))
+                .thenSucceed();
+    }
+
+    private static void startOverloadedBoost(ServerPlayer player, int thrustTicks) {
+        Vec3 direction = new Vec3(0.0, 0.0, 1.0);
+        BoosterMotionTicker.start(
+                player.serverLevel(),
+                player,
+                direction,
+                new com.boostermod.balance.BoosterBalanceProfile(1.20, 0.060, thrustTicks),
+                player.getEyePosition(),
+                player.getEyeY() - player.getY(),
+                false,
+                true,
+                true);
     }
 
     private static void prepareCorridor(GameTestHelper helper) {
