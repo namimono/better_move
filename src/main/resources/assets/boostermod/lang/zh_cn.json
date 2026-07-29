@@ -23,6 +23,7 @@
 	"item.boostermod.charge_upgrade.tooltip": "按住推进键蓄力；蓄满后过载，撞击时可爆炸。",
 	"item.boostermod.wall_break_upgrade": "破壁升级项",
 	"item.boostermod.wall_break_upgrade.tooltip": "沿飞行路径突破可破坏墙体；墙内持续消耗生命值。",
+	"death.attack.boostermod.wall_break": "%1$s与墙融为了一体",
 	"item.boostermod.booster_leggings.no_upgrades": "未安装升级项",
 	"item.boostermod.booster_leggings.upgrades_header": "已安装升级：",
 	"container.boostermod.booster_upgrade": "推进器升级",

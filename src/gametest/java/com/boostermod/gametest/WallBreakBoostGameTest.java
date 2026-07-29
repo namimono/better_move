@@ -14,6 +14,8 @@ import net.fabricmc.fabric.api.gametest.v1.FabricGameTest;
 import net.minecraft.core.BlockPos;
 import net.minecraft.gametest.framework.GameTest;
 import net.minecraft.gametest.framework.GameTestHelper;
+import net.minecraft.network.chat.Component;
+import net.minecraft.network.chat.contents.TranslatableContents;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.SimpleContainer;
@@ -547,6 +549,46 @@ public class WallBreakBoostGameTest {
                 .thenExecute(() -> helper.assertTrue(
                         player.getHealth() == 19.0F,
                         "护甲、抗性与无敌帧不得减免破壁固定伤害, health=" + player.getHealth()))
+                .thenExecute(() -> cleanupPlayer(player))
+                .thenSucceed();
+    }
+
+    /**
+     * die() 结束会清空战斗记录，因此在致死前校验破壁伤害源与死亡消息 key。
+     */
+    @GameTest(template = FabricGameTest.EMPTY_STRUCTURE, batch = "wallBreak_healthLife", timeoutTicks = TIMEOUT)
+    public void wallBreakDeathMessageUsesCustomDamageType(GameTestHelper helper) {
+        ServerPlayer player = spawnBoostingPlayer(helper, new BlockPos(3, 1, 1), "wb-death-msg", true);
+        player.setHealth(1.0F);
+
+        helper.startSequence()
+                .thenExecute(() -> {
+                    var source = player.damageSources().source(WallBreakSupport.DAMAGE_TYPE);
+                    helper.assertTrue(
+                            source.is(WallBreakSupport.DAMAGE_TYPE),
+                            "破壁伤害源应绑定自定义伤害类型");
+
+                    Component fromSource = source.getLocalizedDeathMessage(player);
+                    helper.assertTrue(
+                            fromSource.getContents() instanceof TranslatableContents contents
+                                    && "death.attack.boostermod.wall_break".equals(contents.getKey()),
+                            "破壁伤害源应生成专属死亡消息 key, got=" + fromSource);
+
+                    // die() 播报取自战斗记录；在生命归零前记录并读取
+                    player.getCombatTracker().recordDamage(source, WallBreakSupport.HEALTH_COST);
+                    Component fromCombat = player.getCombatTracker().getDeathMessage();
+                    helper.assertTrue(
+                            fromCombat.getContents() instanceof TranslatableContents combatContents
+                                    && "death.attack.boostermod.wall_break".equals(combatContents.getKey()),
+                            "战斗记录应产出破壁死亡消息, got=" + fromCombat);
+
+                    helper.assertTrue(
+                            WallBreakSupport.applyHealthCost(player),
+                            "1 点破壁代价应可致死");
+                    helper.assertTrue(
+                            !player.isAlive() || player.isDeadOrDying() || player.getHealth() <= 0.0F,
+                            "applyHealthCost 致死后玩家应死亡");
+                })
                 .thenExecute(() -> cleanupPlayer(player))
                 .thenSucceed();
     }

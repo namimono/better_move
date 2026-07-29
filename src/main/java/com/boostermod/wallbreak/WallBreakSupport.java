@@ -1,15 +1,20 @@
 package com.boostermod.wallbreak;
 
+import com.boostermod.BoosterMod;
 import com.boostermod.item.BoosterEquipment;
 import com.boostermod.upgrade.BoosterUpgradeHelper;
 import com.boostermod.upgrade.BoosterUpgradeType;
 import java.util.ArrayList;
 import java.util.List;
 import net.minecraft.core.BlockPos;
+import net.minecraft.core.registries.Registries;
+import net.minecraft.resources.ResourceKey;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.sounds.SoundEvents;
 import net.minecraft.sounds.SoundSource;
+import net.minecraft.world.damagesource.DamageSource;
+import net.minecraft.world.damagesource.DamageType;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
 import net.minecraft.world.level.block.Block;
@@ -29,6 +34,10 @@ public final class WallBreakSupport {
     public static final float HEALTH_COST = 1.0f;
     /** 持续破壁期间再次结算代价所需的实际清方 tick 数。 */
     public static final int COST_INTERVAL_TICKS = 10;
+
+    /** 破壁生命代价对应的伤害类型（决定聊天栏死亡播报）。 */
+    public static final ResourceKey<DamageType> DAMAGE_TYPE =
+            ResourceKey.create(Registries.DAMAGE_TYPE, BoosterMod.id("wall_break"));
 
     private static final double BOX_EDGE_EPSILON = 1.0e-7;
     private static final ItemStack BASE_LOOT_TOOL = new ItemStack(Items.DIAMOND_PICKAXE);
@@ -65,13 +74,15 @@ public final class WallBreakSupport {
             return false;
         }
         // 直接改生命值：绕过护甲、抗性与 hurt 无敌帧
+        DamageSource source = player.damageSources().source(DAMAGE_TYPE);
         player.invulnerableTime = 0;
+        float dealt = Math.min(HEALTH_COST, player.getHealth());
         float next = player.getHealth() - HEALTH_COST;
+        // 写入战斗记录，致死时聊天栏才能播报破壁专属死亡消息
+        player.getCombatTracker().recordDamage(source, dealt);
         if (next <= 0.0f) {
             player.setHealth(0.0f);
-            if (!player.isDeadOrDying()) {
-                player.die(player.damageSources().generic());
-            }
+            player.die(source);
         } else {
             player.setHealth(next);
         }

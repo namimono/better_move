@@ -23,6 +23,7 @@
 	"item.boostermod.charge_upgrade.tooltip": "Hold Boost to charge; full charge overloads and can explode on impact.",
 	"item.boostermod.wall_break_upgrade": "Wall-Break Upgrade",
 	"item.boostermod.wall_break_upgrade.tooltip": "Boost through breakable walls along your flight path; costs health while inside walls.",
+	"death.attack.boostermod.wall_break": "%1$s became one with the wall",
 	"item.boostermod.booster_leggings.no_upgrades": "No upgrades installed",
 	"item.boostermod.booster_leggings.upgrades_header": "Installed upgrades:",
 	"container.boostermod.booster_upgrade": "Booster Upgrades",
